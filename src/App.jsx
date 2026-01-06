@@ -16,6 +16,7 @@ import Login from "./pages/public/Login/Login";
 import Signup from "./pages/public/Signup/Signup";
 import AdminDashboard from "./pages/admin/Dashboard/Dashboard";
 import BidderDashboard from "./pages/bidder/Dashboard/Dashboard";
+import TenderCreate from "./pages/admin/TenderCreate/TenderCreate";
 
 // Landing Page Component
 function LandingPage() {
@@ -47,6 +48,7 @@ export default function App() {
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="tender/create" element={<TenderCreate />} />
         </Route>
 
         {/* Bidder Routes */}
