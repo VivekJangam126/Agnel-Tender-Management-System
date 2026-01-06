@@ -18,7 +18,7 @@ const adminMenu = [
 
 const bidderMenu = [
   { label: "Dashboard", href: "/bidder/dashboard", icon: LayoutDashboard },
-  { label: "Saved Tenders", href: "/bidder/saved", icon: Bookmark },
+  { label: "Saved Tenders", href: "/bidder/saved-tenders", icon: Bookmark },
   { label: "Proposals", href: "/bidder/proposals", icon: FileCheck },
   { label: "Profile", href: "/bidder/profile", icon: Settings },
 ];

@@ -68,7 +68,11 @@ export default function App() {
         {/* Bidder Routes */}
         <Route path="/bidder" element={<BidderLayout />}>
           <Route path="dashboard" element={<BidderDashboard />} />
-          <Route path="saved" element={<BidderSaved />} />
+          <Route path="saved-tenders" element={<BidderSaved />} />
+          <Route
+            path="saved"
+            element={<Navigate to="/bidder/saved-tenders" replace />}
+          />
           <Route path="proposals" element={<BidderProposals />} />
           <Route path="proposals/:proposalId" element={<ProposalDraft />} />
           <Route path="profile" element={<BidderProfile />} />

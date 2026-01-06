@@ -1,26 +1,27 @@
+import { Link } from "react-router-dom";
 import PageHeader from "../../../components/shared/PageHeader";
+import ActiveProposals from "./components/ActiveProposals";
+import SavedTenders from "./components/SavedTenders";
+import RecentlyViewed from "./components/RecentlyViewed";
 
 export default function Dashboard() {
   return (
-    <div>
+    <div className="max-w-6xl mx-auto space-y-8">
       <PageHeader
-        title="Bidder Dashboard"
-        description="View available tenders and manage your proposals"
-      />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg border border-neutral-200">
-          <h3 className="text-2xl font-bold text-primary-600">8</h3>
-          <p className="text-sm text-neutral-600 mt-1">Saved Tenders</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg border border-neutral-200">
-          <h3 className="text-2xl font-bold text-amber-600">3</h3>
-          <p className="text-sm text-neutral-600 mt-1">Active Proposals</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg border border-neutral-200">
-          <h3 className="text-2xl font-bold text-emerald-600">2</h3>
-          <p className="text-sm text-neutral-600 mt-1">Won Tenders</p>
-        </div>
-      </div>
+        title="Dashboard"
+        description="Track your active proposals and shortlisted tenders"
+      >
+        <Link
+          to="/bidder/saved"
+          className="px-4 py-2 rounded-md border border-primary-600 text-primary-600 hover:bg-primary-50 text-sm font-medium"
+        >
+          Browse Tenders
+        </Link>
+      </PageHeader>
+
+      <ActiveProposals />
+      <SavedTenders />
+      <RecentlyViewed />
     </div>
   );
 }
