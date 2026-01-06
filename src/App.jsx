@@ -14,8 +14,13 @@ import Security from "./pages/public/Landing/components/Security";
 import CallToAction from "./pages/public/Landing/components/CallToAction";
 import Login from "./pages/public/Login/Login";
 import Signup from "./pages/public/Signup/Signup";
+import TenderDetail from "./pages/public/Tender/TenderDetail";
 import AdminDashboard from "./pages/admin/Dashboard/Dashboard";
 import BidderDashboard from "./pages/bidder/Dashboard/Dashboard";
+import BidderProfile from "./pages/bidder/Profile/Profile";
+import BidderProposals from "./pages/bidder/Proposals/Proposals";
+import BidderSaved from "./pages/bidder/Saved/Saved";
+import ProposalDraft from "./pages/bidder/ProposalDraft/ProposalDraft";
 import TenderCreate from "./pages/admin/TenderCreate/TenderCreate";
 import Analytics from "./pages/admin/Analytics/Analytics";
 import Profile from "./pages/admin/Profile/Profile";
@@ -47,6 +52,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/tender/:id" element={<TenderDetail />} />
         </Route>
 
         {/* Admin Routes */}
@@ -62,6 +68,10 @@ export default function App() {
         {/* Bidder Routes */}
         <Route path="/bidder" element={<BidderLayout />}>
           <Route path="dashboard" element={<BidderDashboard />} />
+          <Route path="saved" element={<BidderSaved />} />
+          <Route path="proposals" element={<BidderProposals />} />
+          <Route path="proposals/:proposalId" element={<ProposalDraft />} />
+          <Route path="profile" element={<BidderProfile />} />
         </Route>
 
         {/* Fallback */}
