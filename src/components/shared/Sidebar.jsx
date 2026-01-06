@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   FileText,
-  FolderOpen,
+  BarChart3,
   Settings,
   Bookmark,
   FileCheck,
@@ -11,8 +11,9 @@ import {
 const adminMenu = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Create Tender", href: "/admin/tender/create", icon: FileText },
-  { label: "My Tenders", href: "/admin/tenders", icon: FolderOpen },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
+  { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { label: "Bid Evaluation", href: "/admin/bid-evaluation", icon: FileCheck },
+  { label: "Profile / Settings", href: "/admin/profile", icon: Settings },
 ];
 
 const bidderMenu = [
