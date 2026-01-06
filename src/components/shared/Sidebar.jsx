@@ -1,3 +1,69 @@
-export default function Sidebar() {
-  return null;
+import { Link, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  FileText,
+  FolderOpen,
+  Settings,
+  Bookmark,
+  FileCheck,
+} from "lucide-react";
+
+const adminMenu = [
+  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { label: "Create Tender", href: "/admin/tender/create", icon: FileText },
+  { label: "My Tenders", href: "/admin/tenders", icon: FolderOpen },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
+];
+
+const bidderMenu = [
+  { label: "Dashboard", href: "/bidder/dashboard", icon: LayoutDashboard },
+  { label: "Saved Tenders", href: "/bidder/saved", icon: Bookmark },
+  { label: "Proposals", href: "/bidder/proposals", icon: FileCheck },
+  { label: "Profile", href: "/bidder/profile", icon: Settings },
+];
+
+export default function Sidebar({ role = "admin" }) {
+  const location = useLocation();
+  const menu = role === "admin" ? adminMenu : bidderMenu;
+
+  return (
+    <aside className="w-64 h-screen bg-neutral-950 text-white flex flex-col fixed top-0 left-0 overflow-y-auto">
+      {/* Logo */}
+      <div className="h-16 flex items-center px-6 border-b border-neutral-800">
+        <Link to="/" className="font-semibold text-lg tracking-tight">
+          TenderFlow AI
+        </Link>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-4 py-6">
+        <ul className="space-y-2">
+          {menu.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.href;
+            return (
+              <li key={item.href}>
+                <Link
+                  to={item.href}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-primary-600 text-white"
+                      : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* Footer */}
+      <div className="p-4 border-t border-neutral-800 text-xs text-neutral-500">
+        <p>Logged in as {role === "admin" ? "Authority" : "Bidder"}</p>
+      </div>
+    </aside>
+  );
 }
