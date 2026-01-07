@@ -19,6 +19,9 @@ export const tenderService = {
   publishTender: (id, token) => 
     apiRequest(`/tenders/${id}/publish`, { method: 'POST', token }),
   
+  deleteTender: (id, token) => 
+    apiRequest(`/tenders/${id}`, { method: 'DELETE', token }),
+  
   addSection: (tenderId, payload, token) => 
     apiRequest(`/tenders/${tenderId}/sections`, { method: 'POST', token, body: payload }),
   

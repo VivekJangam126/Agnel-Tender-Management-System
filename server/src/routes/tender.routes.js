@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import {
+  listTenders,
   createTender,
   updateTender,
   getTender,
   publishTender,
+  deleteTender,
   addSection,
   updateSection,
   deleteSection,
@@ -14,10 +16,14 @@ import { requireRole } from '../middlewares/role.middleware.js';
 
 const router = Router();
 
+// List tenders (role-based: AUTHORITY = org tenders, BIDDER = published)
+router.get('/', requireAuth, listTenders);
+
 // Tender CRUD
 router.post('/', requireAuth, requireRole('AUTHORITY'), createTender);
 router.put('/:id', requireAuth, requireRole('AUTHORITY'), updateTender);
 router.get('/:id', requireAuth, getTender); // Both AUTHORITY and BIDDER can read
+router.delete('/:id', requireAuth, requireRole('AUTHORITY'), deleteTender);
 router.post('/:id/publish', requireAuth, requireRole('AUTHORITY'), publishTender);
 
 // Section Management

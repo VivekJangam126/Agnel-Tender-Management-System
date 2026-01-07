@@ -3,6 +3,48 @@ import { AIService } from './ai.service.js';
 
 export const TenderService = {
   /**
+   * List tenders with role-based filtering
+   * AUTHORITY: tenders in their organization (all statuses)
+   * BIDDER: only PUBLISHED tenders
+   * Optional filters: status (DRAFT|PUBLISHED)
+   */
+  async listTenders(user, { status } = {}) {
+    let query;
+    let params = [];
+    let paramIndex = 1;
+
+    const baseQuery = `
+      SELECT t.tender_id, t.organization_id, t.title, t.description, 
+             t.status, t.submission_deadline, t.created_at,
+             o.name as organization_name
+      FROM tender t
+      JOIN organization o ON t.organization_id = o.organization_id
+    `;
+
+    const conditions = [];
+
+    if (user.role === 'AUTHORITY') {
+      // AUTHORITY can see tenders in their organization
+      conditions.push(`t.organization_id = $${paramIndex++}`);
+      params.push(user.organizationId);
+    } else {
+      // BIDDER can only see PUBLISHED tenders
+      conditions.push(`t.status = 'PUBLISHED'`);
+    }
+
+    if (status) {
+      conditions.push(`t.status = $${paramIndex++}`);
+      params.push(status);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    query = `${baseQuery} ${whereClause} ORDER BY t.created_at DESC`;
+
+    const result = await pool.query(query, params);
+    return result.rows;
+  },
+
+  /**
    * Create a new tender (DRAFT status by default)
    */
   async createTender(data, user) {
@@ -180,8 +222,13 @@ export const TenderService = {
         [tenderId]
       );
 
-      // Ingest tender content for AI (same transaction)
-      await AIService.ingestTender(tenderId, { client, skipTransaction: true });
+      // Ingest tender content for AI (same transaction) - gracefully handle AI errors
+      try {
+        await AIService.ingestTender(tenderId, { client, skipTransaction: true });
+      } catch (aiErr) {
+        console.warn('AI ingestion failed, continuing with publish:', aiErr.message);
+        // Don't fail publish if AI ingestion fails
+      }
 
       await client.query('COMMIT');
 
@@ -192,6 +239,38 @@ export const TenderService = {
     } finally {
       client.release();
     }
+  },
+
+  /**
+   * Delete a tender (only DRAFT status, belongs to user org)
+   */
+  async deleteTender(tenderId, user) {
+    const tenderCheck = await pool.query(
+      'SELECT tender_id, status, organization_id FROM tender WHERE tender_id = $1',
+      [tenderId]
+    );
+
+    if (tenderCheck.rows.length === 0) {
+      throw new Error('Tender not found');
+    }
+
+    const tender = tenderCheck.rows[0];
+
+    if (tender.organization_id !== user.organizationId) {
+      throw new Error('Unauthorized: Tender belongs to another organization');
+    }
+
+    if (tender.status !== 'DRAFT') {
+      throw new Error('Cannot delete published tender');
+    }
+
+    // Delete sections first (foreign key constraint)
+    await pool.query('DELETE FROM tender_section WHERE tender_id = $1', [tenderId]);
+
+    // Delete tender
+    await pool.query('DELETE FROM tender WHERE tender_id = $1', [tenderId]);
+
+    return { success: true, message: 'Tender deleted successfully' };
   },
 
   /**

@@ -1,6 +1,19 @@
 import { TenderService } from '../services/tender.service.js';
 
 /**
+ * List tenders (role-based filtering)
+ */
+export async function listTenders(req, res, next) {
+  try {
+    const { status } = req.query;
+    const tenders = await TenderService.listTenders(req.user, { status });
+    res.json({ tenders });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Create a new tender
  */
 export async function createTender(req, res, next) {
@@ -64,6 +77,28 @@ export async function getTender(req, res, next) {
   } catch (err) {
     if (err.message === 'Tender not found') {
       return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Delete a tender (DRAFT only)
+ */
+export async function deleteTender(req, res, next) {
+  try {
+    const { id } = req.params;
+    const result = await TenderService.deleteTender(id, req.user);
+    res.json(result);
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (
+      err.message.includes('Unauthorized') ||
+      err.message.includes('Cannot delete published')
+    ) {
+      return res.status(403).json({ error: err.message });
     }
     next(err);
   }

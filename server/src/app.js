@@ -19,7 +19,7 @@ const app = express();
 
 const allowedOrigins = env.CORS_ORIGINS
   ? env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
-  : ['http://localhost:5173'];
+  : ['http://localhost:5173', 'http://localhost:5174'];
 
 const corsOptions = {
   origin: (origin, callback) => {
