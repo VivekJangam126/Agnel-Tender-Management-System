@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import useAuth from "../../../hooks/useAuth";
 import { tenderService } from "../../../services/tenderService";
 import Stepper from "./components/Stepper";
@@ -16,6 +16,7 @@ const STEPS = [
 export default function TenderCreate() {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const { tenderId: editTenderId } = useParams();
   const [currentStep, setCurrentStep] = useState(1);
   const [tenderDraft, setTenderDraft] = useState({
     basicInfo: {},
@@ -27,6 +28,44 @@ export default function TenderCreate() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [published, setPublished] = useState(false);
+  const [loading, setLoading] = useState(!!editTenderId);
+
+  // Load existing tender for editing
+  useEffect(() => {
+    async function loadTender() {
+      if (!editTenderId) return;
+      try {
+        const tender = await tenderService.getTender(editTenderId, token);
+        if (tender.status !== 'DRAFT') {
+          setError('Only draft tenders can be edited');
+          setTimeout(() => navigate('/admin/dashboard'), 2000);
+          return;
+        }
+        setTenderId(tender.tender_id);
+        setTenderDraft({
+          basicInfo: {
+            title: tender.title,
+            description: tender.description,
+            submissionDeadline: tender.submission_deadline?.split('T')[0],
+          },
+          sections: (tender.sections || []).map(s => ({
+            section_id: s.section_id,
+            id: s.section_id,
+            title: s.title,
+            mandatory: s.is_mandatory,
+            order: s.order_index,
+            _saved: true,
+          })),
+          metadata: {},
+        });
+      } catch (err) {
+        setError(err.message || 'Failed to load tender');
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (token) loadTender();
+  }, [editTenderId, token, navigate]);
 
   const handleNext = async () => {
     if (currentStep < STEPS.length && isStepValid) {
@@ -34,16 +73,29 @@ export default function TenderCreate() {
       setIsSaving(true);
       try {
         if (currentStep === 1) {
-          // Step 1: Create tender draft
-          const created = await tenderService.createTender(
-            {
-              title: tenderDraft.basicInfo.title,
-              description: tenderDraft.basicInfo.description,
-              submission_deadline: tenderDraft.basicInfo.submissionDeadline,
-            },
-            token
-          );
-          setTenderId(created.tender_id);
+          if (tenderId) {
+            // Edit mode: update existing tender
+            await tenderService.updateTender(
+              tenderId,
+              {
+                title: tenderDraft.basicInfo.title,
+                description: tenderDraft.basicInfo.description,
+                submission_deadline: tenderDraft.basicInfo.submissionDeadline,
+              },
+              token
+            );
+          } else {
+            // Create mode: create new tender draft
+            const created = await tenderService.createTender(
+              {
+                title: tenderDraft.basicInfo.title,
+                description: tenderDraft.basicInfo.description,
+                submission_deadline: tenderDraft.basicInfo.submissionDeadline,
+              },
+              token
+            );
+            setTenderId(created.tender_id);
+          }
         } else if (currentStep === 2 && tenderId) {
           // Step 2: Add/update sections and mark them as saved
           for (const section of tenderDraft.sections) {
@@ -162,17 +214,19 @@ export default function TenderCreate() {
       <div className="border-b border-neutral-200 bg-white sticky top-0 z-10">
         <div className="px-8 py-6">
           <h1 className="text-2xl font-semibold text-neutral-900">
-            Create New Tender
+            {editTenderId ? 'Edit Tender' : 'Create New Tender'}
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Follow the steps to create and publish your tender
+            {loading ? 'Loading tender...' : 'Follow the steps to create and publish your tender'}
           </p>
         </div>
 
         {/* Stepper */}
-        <div className="px-8 pb-6">
-          <Stepper steps={STEPS} currentStep={currentStep} />
-        </div>
+        {!loading && (
+          <div className="px-8 pb-6">
+            <Stepper steps={STEPS} currentStep={currentStep} />
+          </div>
+        )}
       </div>
 
       {/* Step Content */}
@@ -188,7 +242,11 @@ export default function TenderCreate() {
               Tender published successfully!
             </div>
           )}
-          {renderStepContent()}
+          {loading ? (
+            <div className="text-sm text-neutral-600">Loading tender data...</div>
+          ) : (
+            renderStepContent()
+          )}
         </div>
       </div>
 

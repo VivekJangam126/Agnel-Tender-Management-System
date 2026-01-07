@@ -63,6 +63,7 @@ export default function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="tender/create" element={<TenderCreate />} />
+              <Route path="tender/edit/:tenderId" element={<TenderCreate />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="profile" element={<Profile />} />
               <Route path="bid-evaluation" element={<BidEvaluationList />} />

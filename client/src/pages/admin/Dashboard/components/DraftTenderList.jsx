@@ -1,6 +1,26 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import useAuth from "../../../../hooks/useAuth";
+import { tenderService } from "../../../../services/tenderService";
 
 export default function DraftTenderList({ drafts = [], onDelete }) {
+  const { token } = useAuth();
+  const [deleting, setDeleting] = useState(null);
+
+  const handleDelete = async (tenderId) => {
+    if (!window.confirm("Delete this draft tender? This action cannot be undone.")) {
+      return;
+    }
+    setDeleting(tenderId);
+    try {
+      await tenderService.deleteTender(tenderId, token);
+      onDelete && onDelete(tenderId);
+    } catch (err) {
+      alert(err.message || "Failed to delete tender");
+    } finally {
+      setDeleting(null);
+    }
+  };
   if (!drafts.length) {
     return (
       <div className="bg-white border border-neutral-200 rounded-lg p-8 text-center">
@@ -39,20 +59,17 @@ export default function DraftTenderList({ drafts = [], onDelete }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              to={`/admin/tender/create${t.step ? `?step=${t.step}` : ""}`}
+              to={`/admin/tender/edit/${t.id}`}
               className="px-3 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
             >
-              Continue
+              Edit
             </Link>
             <button
-              onClick={() => {
-                if (window.confirm("Delete this draft tender?")) {
-                  onDelete && onDelete(t.id);
-                }
-              }}
-              className="px-3 py-2 rounded-md border border-neutral-300 bg-white text-neutral-700 text-sm font-medium hover:bg-neutral-50"
+              onClick={() => handleDelete(t.id)}
+              disabled={deleting === t.id}
+              className="px-3 py-2 rounded-md border border-neutral-300 bg-white text-neutral-700 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
             >
-              Delete
+              {deleting === t.id ? "Deleting..." : "Delete"}
             </button>
           </div>
         </div>
