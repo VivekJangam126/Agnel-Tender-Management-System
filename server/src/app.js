@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import { loadEnv } from './config/env.js';
+import { env, loadEnv } from './config/env.js';
 
 // Load environment variables
 loadEnv();
@@ -17,7 +17,21 @@ import { errorHandler } from './middlewares/error.middleware.js';
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = env.CORS_ORIGINS
+  ? env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : ['http://localhost:5173'];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow non-browser tools
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: env.CORS_ALLOW_CREDENTIALS === 'true',
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(morgan('dev'));
 

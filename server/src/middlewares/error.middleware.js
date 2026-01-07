@@ -1,6 +1,18 @@
 import { logger } from '../utils/logger.js';
 
 export function errorHandler(err, req, res, next) {
-  logger.error(err.stack || err.message || String(err));
-  res.status(500).json({ error: 'Internal Server Error' });
+  const status = err.statusCode || err.status || (err.message === 'Not allowed by CORS' ? 403 : 500);
+  const isServerError = status >= 500;
+
+  logger.error(`[${req.method} ${req.originalUrl}] ${err.stack || err.message || String(err)}`);
+
+  const payload = {
+    error: isServerError ? 'Internal Server Error' : err.message || 'Unexpected error',
+  };
+
+  if (err.code) {
+    payload.code = err.code;
+  }
+
+  res.status(status).json(payload);
 }

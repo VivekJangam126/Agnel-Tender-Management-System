@@ -1,20 +1,199 @@
 import { TenderService } from '../services/tender.service.js';
 
-export async function listTenders(req, res, next) {
+/**
+ * Create a new tender
+ */
+export async function createTender(req, res, next) {
   try {
-    const list = await TenderService.list();
-    res.json(list);
+    const { title, description, submission_deadline } = req.body;
+
+    if (!title || !description || !submission_deadline) {
+      return res.status(400).json({
+        error: 'Missing required fields: title, description, submission_deadline',
+      });
+    }
+
+    const tender = await TenderService.createTender(
+      { title, description, submission_deadline },
+      req.user
+    );
+
+    res.status(201).json(tender);
   } catch (err) {
     next(err);
   }
 }
 
+/**
+ * Update a tender (only DRAFT status)
+ */
+export async function updateTender(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { title, description, submission_deadline } = req.body;
+
+    const tender = await TenderService.updateTender(
+      id,
+      { title, description, submission_deadline },
+      req.user
+    );
+
+    res.json(tender);
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (
+      err.message.includes('Unauthorized') ||
+      err.message === 'Cannot update published tender'
+    ) {
+      return res.status(403).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Get a tender by ID
+ */
 export async function getTender(req, res, next) {
   try {
-    const item = await TenderService.getById(req.params.id);
-    if (!item) return res.status(404).json({ error: 'Not found' });
-    res.json(item);
+    const { id } = req.params;
+    const tender = await TenderService.getTenderById(id, req.user);
+    res.json(tender);
   } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Publish a tender (DRAFT → PUBLISHED)
+ */
+export async function publishTender(req, res, next) {
+  try {
+    const { id } = req.params;
+    const tender = await TenderService.publishTender(id, req.user);
+    res.json(tender);
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (
+      err.message.includes('Unauthorized') ||
+      err.message.includes('already published') ||
+      err.message.includes('without sections')
+    ) {
+      return res.status(403).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Add a section to a tender
+ */
+export async function addSection(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { title, is_mandatory } = req.body;
+
+    if (!title) {
+      return res.status(400).json({ error: 'Section title is required' });
+    }
+
+    const section = await TenderService.addSection(id, title, is_mandatory, req.user);
+
+    res.status(201).json(section);
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (
+      err.message.includes('Unauthorized') ||
+      err.message.includes('Cannot add sections')
+    ) {
+      return res.status(403).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Update a section
+ */
+export async function updateSection(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { title, is_mandatory } = req.body;
+
+    const section = await TenderService.updateSection(id, { title, is_mandatory }, req.user);
+
+    res.json(section);
+  } catch (err) {
+    if (err.message === 'Section not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (
+      err.message.includes('Unauthorized') ||
+      err.message.includes('Cannot update sections')
+    ) {
+      return res.status(403).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Delete a section
+ */
+export async function deleteSection(req, res, next) {
+  try {
+    const { id } = req.params;
+    const result = await TenderService.deleteSection(id, req.user);
+    res.json(result);
+  } catch (err) {
+    if (err.message === 'Section not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (
+      err.message.includes('Unauthorized') ||
+      err.message.includes('Cannot delete sections')
+    ) {
+      return res.status(403).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Reorder sections
+ */
+export async function reorderSections(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { orderedSectionIds } = req.body;
+
+    if (!Array.isArray(orderedSectionIds)) {
+      return res.status(400).json({ error: 'orderedSectionIds must be an array' });
+    }
+
+    const sections = await TenderService.reorderSections(id, orderedSectionIds, req.user);
+
+    res.json(sections);
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (
+      err.message.includes('Unauthorized') ||
+      err.message.includes('Cannot reorder sections') ||
+      err.message.includes('do not belong')
+    ) {
+      return res.status(403).json({ error: err.message });
+    }
     next(err);
   }
 }

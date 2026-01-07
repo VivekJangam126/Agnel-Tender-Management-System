@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 let loaded = false;
 
 const REQUIRED_DB_VARS = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+const REQUIRED_AUTH_VARS = ['JWT_SECRET'];
+const REQUIRED_AI_VARS = ['OPENAI_API_KEY'];
 
 export function loadEnv() {
   if (loaded) return;
@@ -10,13 +12,31 @@ export function loadEnv() {
   dotenv.config();
   loaded = true;
 
-  const missing = REQUIRED_DB_VARS.filter((key) => {
+  const missingDb = REQUIRED_DB_VARS.filter((key) => {
     const value = process.env[key];
     return value === undefined || value.trim() === '';
   });
 
-  if (missing.length > 0) {
-    throw new Error(`Missing required database environment variables: ${missing.join(', ')}`);
+  const missingAuth = REQUIRED_AUTH_VARS.filter((key) => {
+    const value = process.env[key];
+    return value === undefined || value.trim() === '';
+  });
+
+  const missingAI = REQUIRED_AI_VARS.filter((key) => {
+    const value = process.env[key];
+    return value === undefined || value.trim() === '';
+  });
+
+  if (missingDb.length > 0) {
+    throw new Error(`Missing required database environment variables: ${missingDb.join(', ')}`);
+  }
+
+  if (missingAuth.length > 0) {
+    throw new Error(`Missing required auth environment variables: ${missingAuth.join(', ')}`);
+  }
+
+  if (missingAI.length > 0) {
+    throw new Error(`Missing required AI environment variables: ${missingAI.join(', ')}`);
   }
 }
 
@@ -44,5 +64,17 @@ export const env = (() => {
     DB_NAME: process.env.DB_NAME,
     DB_USER: process.env.DB_USER,
     DB_PASSWORD: process.env.DB_PASSWORD,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    JWT_SECRET: process.env.JWT_SECRET,
+    // Optional AI tuning
+    OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+    OPENAI_CHAT_MODEL: process.env.OPENAI_CHAT_MODEL || 'gpt-3.5-turbo',
+    OPENAI_CHAT_TEMPERATURE: process.env.OPENAI_CHAT_TEMPERATURE || '0',
+    // HTTP security & performance
+    CORS_ORIGINS: process.env.CORS_ORIGINS || '', // comma-separated list
+    CORS_ALLOW_CREDENTIALS: process.env.CORS_ALLOW_CREDENTIALS || 'false',
+    RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS || '60000',
+    RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX || '30',
   };
 })();
+

@@ -1,21 +1,64 @@
 import { AuthService } from '../services/auth.service.js';
 
-export async function login(req, res, next) {
+export async function signup(req, res, next) {
   try {
-    const { email, password } = req.body;
-    const result = await AuthService.login(email, password);
-    res.json(result);
+    const { name, email, password, role, organizationName } = req.body;
+
+    // Input validation
+    if (!name || !email || !password || !role || !organizationName) {
+      return res.status(400).json({
+        error: 'Missing required fields: name, email, password, role, organizationName',
+      });
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Password strength validation
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Role validation
+    if (!['AUTHORITY', 'BIDDER'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be AUTHORITY or BIDDER' });
+    }
+
+    const result = await AuthService.signup({
+      name,
+      email,
+      password,
+      role,
+      organizationName,
+    });
+
+    res.status(201).json(result);
   } catch (err) {
+    if (err.message === 'Email already registered') {
+      return res.status(400).json({ error: err.message });
+    }
     next(err);
   }
 }
 
-export async function register(req, res, next) {
+export async function login(req, res, next) {
   try {
-    const { email, password, name } = req.body;
-    const result = await AuthService.register({ email, password, name });
-    res.status(201).json(result);
+    const { email, password } = req.body;
+
+    // Input validation
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const result = await AuthService.login(email, password);
+    res.json(result);
   } catch (err) {
+    if (err.message === 'Invalid email or password') {
+      return res.status(401).json({ error: err.message });
+    }
     next(err);
   }
 }
