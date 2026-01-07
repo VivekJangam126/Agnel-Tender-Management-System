@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import useAuth from "../../../hooks/useAuth";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -26,26 +28,18 @@ export default function Login() {
       return;
     }
 
-    setTimeout(() => {
-      const mockRole = formData.email.includes("admin")
-        ? "authority"
-        : "bidder";
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          email: formData.email,
-          role: mockRole,
-          name: formData.email.split("@")[0],
-        })
-      );
-
-      if (mockRole === "authority") {
+    try {
+      const user = await login(formData.email, formData.password);
+      if (user.role === "authority") {
         navigate("/admin/dashboard");
       } else {
         navigate("/bidder/dashboard");
       }
-    }, 1000);
+    } catch (err) {
+      setError(err.message || "Login failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

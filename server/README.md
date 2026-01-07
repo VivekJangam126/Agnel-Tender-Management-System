@@ -19,13 +19,16 @@ npm run dev
 
 Server runs on http://localhost:5000 by default.
 
-## Environment Variables
+## Environment Variables (key ones)
 
-- `PORT` - Port to run the server (default: 5000)
-- `DATABASE_URL` - PostgreSQL connection string
-- `JWT_SECRET` - Secret for signing JWTs
-- `OPENAI_API_KEY` - API key for AI features (optional for now)
-- `NODE_ENV` - Node environment (development/production)
+- `PORT` - server port (default: 5000)
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` - Postgres connection
+- `JWT_SECRET` - JWT signing secret (required)
+- `OPENAI_API_KEY` - required for AI features
+- `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_TEMPERATURE` - AI tuning (optional)
+- `CORS_ORIGINS` - comma-separated allowlist (e.g., http://localhost:5173)
+- `CORS_ALLOW_CREDENTIALS` - whether to allow credentials (true/false)
+- `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX` - rate limiting window and max requests per window
 
 ## Routes
 
@@ -33,6 +36,6 @@ Server runs on http://localhost:5000 by default.
 - `POST /api/auth/login` - login
 - `POST /api/auth/register` - register
 - `GET /api/auth/me` - get current user
-- `GET /api/tenders` - list tenders
 - `GET /api/tenders/:id` - get tender by id
-- `POST /api/ai/ask` - ask AI (requires auth)
+- `POST /api/ai/query` - ask AI about published tender (auth)
+- `POST /api/ai/generate` - AI-assisted draft content for tender (auth, authority)

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import useAuth from "../../../hooks/useAuth";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const { signup } = useAuth();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     fullName: "",
@@ -56,23 +58,25 @@ export default function Signup() {
       return;
     }
 
-    setTimeout(() => {
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          email: formData.email,
-          role: formData.role,
-          name: formData.fullName,
-          organization: formData.organizationName,
-        })
-      );
+    try {
+      const user = await signup({
+        name: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role.toUpperCase(),
+        organizationName: formData.organizationName,
+      });
 
-      if (formData.role === "authority") {
+      if (user.role === "authority") {
         navigate("/admin/dashboard");
       } else {
         navigate("/bidder/dashboard");
       }
-    }, 1000);
+    } catch (err) {
+      setError(err.message || "Signup failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

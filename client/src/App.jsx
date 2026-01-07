@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import PublicLayout from "./layouts/PublicLayout";
 import AdminLayout from "./layouts/AdminLayout";
 import BidderLayout from "./layouts/BidderLayout";
+import ProtectedRoute from "./components/shared/ProtectedRoute";
+import { AuthProvider } from "./context/AuthContext";
 
 // Pages
 import Hero from "./pages/public/Landing/components/Hero";
@@ -45,42 +47,48 @@ function LandingPage() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/tender/:id" element={<TenderDetail />} />
-        </Route>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Routes */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/tender/:id" element={<TenderDetail />} />
+          </Route>
 
-        {/* Admin Routes */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="tender/create" element={<TenderCreate />} />
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="bid-evaluation" element={<BidEvaluationList />} />
-          <Route path="bid-evaluation/:tenderId" element={<BidEvaluation />} />
-        </Route>
+          {/* Admin Routes */}
+          <Route element={<ProtectedRoute allowedRoles={["authority"]} />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="tender/create" element={<TenderCreate />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="bid-evaluation" element={<BidEvaluationList />} />
+              <Route path="bid-evaluation/:tenderId" element={<BidEvaluation />} />
+            </Route>
+          </Route>
 
-        {/* Bidder Routes */}
-        <Route path="/bidder" element={<BidderLayout />}>
-          <Route path="dashboard" element={<BidderDashboard />} />
-          <Route path="saved-tenders" element={<BidderSaved />} />
-          <Route
-            path="saved"
-            element={<Navigate to="/bidder/saved-tenders" replace />}
-          />
-          <Route path="proposals" element={<BidderProposals />} />
-          <Route path="proposals/:proposalId" element={<ProposalDraft />} />
-          <Route path="profile" element={<BidderProfile />} />
-        </Route>
+          {/* Bidder Routes */}
+          <Route element={<ProtectedRoute allowedRoles={["bidder"]} />}>
+            <Route path="/bidder" element={<BidderLayout />}>
+              <Route path="dashboard" element={<BidderDashboard />} />
+              <Route path="saved-tenders" element={<BidderSaved />} />
+              <Route
+                path="saved"
+                element={<Navigate to="/bidder/saved-tenders" replace />}
+              />
+              <Route path="proposals" element={<BidderProposals />} />
+              <Route path="proposals/:proposalId" element={<ProposalDraft />} />
+              <Route path="profile" element={<BidderProfile />} />
+            </Route>
+          </Route>
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

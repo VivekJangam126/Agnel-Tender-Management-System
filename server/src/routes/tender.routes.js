@@ -1,9 +1,29 @@
 import { Router } from 'express';
-import { listTenders, getTender } from '../controllers/tender.controller.js';
+import {
+  createTender,
+  updateTender,
+  getTender,
+  publishTender,
+  addSection,
+  updateSection,
+  deleteSection,
+  reorderSections,
+} from '../controllers/tender.controller.js';
+import { requireAuth } from '../middlewares/auth.middleware.js';
+import { requireRole } from '../middlewares/role.middleware.js';
 
 const router = Router();
 
-router.get('/', listTenders);
-router.get('/:id', getTender);
+// Tender CRUD
+router.post('/', requireAuth, requireRole('AUTHORITY'), createTender);
+router.put('/:id', requireAuth, requireRole('AUTHORITY'), updateTender);
+router.get('/:id', requireAuth, getTender); // Both AUTHORITY and BIDDER can read
+router.post('/:id/publish', requireAuth, requireRole('AUTHORITY'), publishTender);
+
+// Section Management
+router.post('/:id/sections', requireAuth, requireRole('AUTHORITY'), addSection);
+router.put('/sections/:id', requireAuth, requireRole('AUTHORITY'), updateSection);
+router.delete('/sections/:id', requireAuth, requireRole('AUTHORITY'), deleteSection);
+router.put('/:id/sections/order', requireAuth, requireRole('AUTHORITY'), reorderSections);
 
 export default router;
