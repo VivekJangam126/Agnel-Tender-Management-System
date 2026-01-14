@@ -11,6 +11,8 @@ import authRoutes from './routes/auth.routes.js';
 import tenderRoutes from './routes/tender.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import proposalRoutes from './routes/proposal.routes.js';
+import evaluationRoutes from './routes/evaluation.routes.js';
+import analyticsRoutes from './routes/analytics.routes.js';
 
 // Error handler
 import { errorHandler } from './middlewares/error.middleware.js';
@@ -41,6 +43,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tenders', tenderRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/proposals', proposalRoutes);
+app.use('/api/evaluation', evaluationRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // 404 handler
 app.use((req, res) => {

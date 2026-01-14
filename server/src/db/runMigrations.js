@@ -15,6 +15,7 @@ const migrations = [
   '006_create_proposal.sql',
   '007_create_proposal_section_response.sql',
   '008_tender_creation_flow_enhancements.sql',
+  '009_create_bid_evaluation.sql',
 ];
 
 async function runMigrations() {
