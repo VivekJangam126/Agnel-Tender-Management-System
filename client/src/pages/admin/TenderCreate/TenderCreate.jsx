@@ -152,16 +152,6 @@ export default function TenderCreate() {
       return;
     }
 
-    // Final confirmation
-    const confirmed = window.confirm(
-      "⚠️ IMPORTANT WARNING ⚠️\n\n" +
-      "Once published, this tender CANNOT be edited or deleted.\n" +
-      "The document will be immediately available to all bidders.\n\n" +
-      "Are you absolutely sure you want to publish this tender?"
-    );
-
-    if (!confirmed) return;
-
     setError(null);
     setIsSaving(true);
     try {
@@ -197,6 +187,11 @@ export default function TenderCreate() {
     }
   };
 
+  const handleGoBackToFix = () => {
+    // Navigate back to Step 2 or Step 1 depending on which has issues
+    setCurrentStep(2); // Default to content builder
+  };
+
   const updateTenderDraft = (field, value) => {
     setTenderDraft((prev) => ({
       ...prev,
@@ -220,6 +215,8 @@ export default function TenderCreate() {
             data={tenderDraft.sections}
             onUpdate={(data) => updateTenderDraft("sections", data)}
             onValidationChange={setIsStepValid}
+            tenderMetadata={tenderDraft.basicInfo}
+            token={token}
           />
         );
       case 3:
@@ -227,6 +224,10 @@ export default function TenderCreate() {
           <StepReviewPublish
             data={tenderDraft}
             onValidationChange={setIsStepValid}
+            onPublish={handlePublish}
+            onGoBack={handleGoBackToFix}
+            isPublishing={isSaving}
+            published={published}
           />
         );
       default:
@@ -291,15 +292,7 @@ export default function TenderCreate() {
             <span className="text-sm text-neutral-500">
               Step {currentStep} of {STEPS.length}
             </span>
-            {currentStep === STEPS.length ? (
-              <button
-                onClick={handlePublish}
-                disabled={!tenderId || published || isSaving}
-                className="px-5 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isSaving ? "Publishing..." : "Publish Tender"}
-              </button>
-            ) : (
+            {currentStep < STEPS.length && (
               <button
                 onClick={handleNext}
                 disabled={!isStepValid || isSaving}
@@ -307,6 +300,11 @@ export default function TenderCreate() {
               >
                 {isSaving ? "Saving..." : "Next"}
               </button>
+            )}
+            {currentStep === STEPS.length && (
+              <span className="text-sm text-neutral-600 italic">
+                Review and publish using the panel on the right →
+              </span>
             )}
           </div>
         </div>

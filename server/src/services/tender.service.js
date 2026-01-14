@@ -48,17 +48,53 @@ export const TenderService = {
    * Create a new tender (DRAFT status by default)
    */
   async createTender(data, user) {
-    const { title, description, submission_deadline } = data;
+    const { 
+      title, 
+      description, 
+      submission_deadline,
+      authority_name,
+      reference_id,
+      tender_type,
+      sector,
+      estimated_value,
+      submission_start_date
+    } = data;
 
     if (!title || !description || !submission_deadline) {
       throw new Error('Missing required fields: title, description, submission_deadline');
     }
 
     const result = await pool.query(
-      `INSERT INTO tender (organization_id, title, description, submission_deadline, status)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING tender_id, organization_id, title, description, status, submission_deadline, created_at`,
-      [user.organizationId, title, description, submission_deadline, 'DRAFT']
+      `INSERT INTO tender (
+        organization_id, 
+        title, 
+        description, 
+        submission_deadline, 
+        status,
+        authority_name,
+        reference_id,
+        tender_type,
+        sector,
+        estimated_value,
+        submission_start_date
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING tender_id, organization_id, title, description, status, submission_deadline, 
+                 authority_name, reference_id, tender_type, sector, estimated_value, 
+                 submission_start_date, created_at`,
+      [
+        user.organizationId, 
+        title, 
+        description, 
+        submission_deadline, 
+        'DRAFT',
+        authority_name || null,
+        reference_id || null,
+        tender_type || null,
+        sector || null,
+        estimated_value || null,
+        submission_start_date || null
+      ]
     );
 
     return result.rows[0];
@@ -88,7 +124,17 @@ export const TenderService = {
       throw new Error('Cannot update published tender');
     }
 
-    const { title, description, submission_deadline } = data;
+    const { 
+      title, 
+      description, 
+      submission_deadline,
+      authority_name,
+      reference_id,
+      tender_type,
+      sector,
+      estimated_value,
+      submission_start_date
+    } = data;
     const updates = [];
     const values = [];
     let paramIndex = 1;
@@ -105,6 +151,30 @@ export const TenderService = {
       updates.push(`submission_deadline = $${paramIndex++}`);
       values.push(submission_deadline);
     }
+    if (authority_name !== undefined) {
+      updates.push(`authority_name = $${paramIndex++}`);
+      values.push(authority_name);
+    }
+    if (reference_id !== undefined) {
+      updates.push(`reference_id = $${paramIndex++}`);
+      values.push(reference_id);
+    }
+    if (tender_type !== undefined) {
+      updates.push(`tender_type = $${paramIndex++}`);
+      values.push(tender_type);
+    }
+    if (sector !== undefined) {
+      updates.push(`sector = $${paramIndex++}`);
+      values.push(sector);
+    }
+    if (estimated_value !== undefined) {
+      updates.push(`estimated_value = $${paramIndex++}`);
+      values.push(estimated_value);
+    }
+    if (submission_start_date !== undefined) {
+      updates.push(`submission_start_date = $${paramIndex++}`);
+      values.push(submission_start_date);
+    }
 
     if (updates.length === 0) {
       throw new Error('No fields to update');
@@ -114,7 +184,9 @@ export const TenderService = {
     const result = await pool.query(
       `UPDATE tender SET ${updates.join(', ')} 
        WHERE tender_id = $${paramIndex}
-       RETURNING tender_id, organization_id, title, description, status, submission_deadline, created_at`,
+       RETURNING tender_id, organization_id, title, description, status, submission_deadline, 
+                 authority_name, reference_id, tender_type, sector, estimated_value, 
+                 submission_start_date, created_at`,
       values
     );
 
@@ -134,8 +206,9 @@ export const TenderService = {
       // AUTHORITY can only see their own organization's tenders
       query = `
         SELECT t.tender_id, t.organization_id, t.title, t.description, 
-               t.status, t.submission_deadline, t.created_at,
-               o.name as organization_name
+               t.status, t.submission_deadline, t.authority_name, t.reference_id,
+               t.tender_type, t.sector, t.estimated_value, t.submission_start_date,
+               t.created_at, o.name as organization_name
         FROM tender t
         JOIN organization o ON t.organization_id = o.organization_id
         WHERE t.tender_id = $1 AND t.organization_id = $2
@@ -145,7 +218,9 @@ export const TenderService = {
       // BIDDER can only see PUBLISHED tenders
       query = `
         SELECT t.tender_id, t.organization_id, t.title, t.description, 
-               t.status, t.submission_deadline, t.created_at,
+               t.status, t.submission_deadline, t.authority_name, t.reference_id,
+               t.tender_type, t.sector, t.estimated_value, t.submission_start_date,
+               t.created_at,
                o.name as organization_name
         FROM tender t
         JOIN organization o ON t.organization_id = o.organization_id
@@ -276,7 +351,9 @@ export const TenderService = {
   /**
    * Add a section to a tender (only if DRAFT)
    */
-  async addSection(tenderId, title, isMandatory, user) {
+  async addSection(tenderId, data, user) {
+    const { title, is_mandatory, content, section_key, description } = data;
+    
     if (!title) {
       throw new Error('Section title is required');
     }
@@ -310,10 +387,10 @@ export const TenderService = {
 
     // Insert the section
     const result = await pool.query(
-      `INSERT INTO tender_section (tender_id, title, order_index, is_mandatory)
-       VALUES ($1, $2, $3, $4)
-       RETURNING section_id, tender_id, title, order_index, is_mandatory, created_at`,
-      [tenderId, title, nextOrder, isMandatory || false]
+      `INSERT INTO tender_section (tender_id, title, order_index, is_mandatory, content, section_key, description)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING section_id, tender_id, title, order_index, is_mandatory, content, section_key, description, created_at`,
+      [tenderId, title, nextOrder, is_mandatory || false, content || null, section_key || null, description || null]
     );
 
     return result.rows[0];
@@ -346,7 +423,7 @@ export const TenderService = {
       throw new Error('Cannot update sections of published tender');
     }
 
-    const { title, is_mandatory } = data;
+    const { title, is_mandatory, content, description } = data;
     const updates = [];
     const values = [];
     let paramIndex = 1;
@@ -359,6 +436,14 @@ export const TenderService = {
       updates.push(`is_mandatory = $${paramIndex++}`);
       values.push(is_mandatory);
     }
+    if (content !== undefined) {
+      updates.push(`content = $${paramIndex++}`);
+      values.push(content);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      values.push(description);
+    }
 
     if (updates.length === 0) {
       throw new Error('No fields to update');
@@ -368,7 +453,7 @@ export const TenderService = {
     const result = await pool.query(
       `UPDATE tender_section SET ${updates.join(', ')} 
        WHERE section_id = $${paramIndex}
-       RETURNING section_id, tender_id, title, order_index, is_mandatory, created_at`,
+       RETURNING section_id, tender_id, title, order_index, is_mandatory, content, description, created_at`,
       values
     );
 

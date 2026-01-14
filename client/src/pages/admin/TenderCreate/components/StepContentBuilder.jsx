@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Lock, FileText, AlertCircle } from "lucide-react";
+import AIAssistant from "../../../../components/admin/AIAssistant";
+import useAuth from "../../../../hooks/useAuth";
 
 // Pre-defined mandatory sections with semantic clarity
 const MANDATORY_SECTIONS = [
@@ -55,7 +57,9 @@ const OPTIONAL_SECTION = {
   placeholder: "Add any additional information, special conditions, or clarifications...",
 };
 
-export default function StepContentBuilder({ data, onUpdate, onValidationChange }) {
+export default function StepContentBuilder({ data, onUpdate, onValidationChange, tenderMetadata, token }) {
+  const { user } = useAuth();
+  
   const [sections, setSections] = useState(() => {
     // Initialize sections from data or create default structure
     if (data && Array.isArray(data) && data.length > 0) {
@@ -108,6 +112,19 @@ export default function StepContentBuilder({ data, onUpdate, onValidationChange 
     ));
   };
 
+  const handleApplyAISuggestion = (suggestion) => {
+    if (suggestion.sectionKey) {
+      // Apply to specific section
+      setSections(prev => prev.map(s => {
+        if (s.key === suggestion.sectionKey) {
+          const newContent = s.content + "\n\n" + suggestion.suggestion;
+          return { ...s, content: newContent.trim() };
+        }
+        return s;
+      }));
+    }
+  };
+
   const selectedSection = sections.find(s => s.key === selectedSectionKey);
   const mandatorySectionsCompleted = sections
     .filter(s => s.mandatory)
@@ -149,7 +166,7 @@ export default function StepContentBuilder({ data, onUpdate, onValidationChange 
       {/* Two-Column Layout */}
       <div className="grid grid-cols-12 gap-6">
         {/* Left Panel - Section Navigation */}
-        <div className="col-span-4">
+        <div className="col-span-3">
           <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden sticky top-6">
             <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
               <h3 className="text-sm font-semibold text-neutral-900">Tender Sections</h3>
@@ -218,8 +235,8 @@ export default function StepContentBuilder({ data, onUpdate, onValidationChange 
           </div>
         </div>
 
-        {/* Right Panel - Section Editor */}
-        <div className="col-span-8">
+        {/* Middle Panel - Section Editor */}
+        <div className="col-span-5">
           {selectedSection && (
             <div className="bg-white border border-neutral-200 rounded-lg">
               {/* Section Header */}
@@ -299,6 +316,19 @@ export default function StepContentBuilder({ data, onUpdate, onValidationChange 
               </div>
             </div>
           )}
+        </div>
+
+        {/* Right Panel - AI Assistant */}
+        <div className="col-span-4 sticky top-6">
+          <AIAssistant 
+            currentSectionKey={selectedSectionKey}
+            currentSectionTitle={selectedSection?.title}
+            currentContent={selectedSection?.content}
+            tenderMetadata={tenderMetadata}
+            allSections={sections}
+            onApplySuggestion={handleApplyAISuggestion}
+            token={token}
+          />
         </div>
       </div>
     </div>

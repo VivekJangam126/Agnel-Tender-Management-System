@@ -8,14 +8,29 @@ import {
   Calendar,
   Building,
   Tag,
-  DollarSign
+  DollarSign,
+  ArrowLeft
 } from "lucide-react";
 
-export default function StepReviewPublish({ data, onValidationChange }) {
+export default function StepReviewPublish({ data, onValidationChange, onPublish, onGoBack, isPublishing = false, published = false }) {
   const [validationChecks, setValidationChecks] = useState({});
+  const [confirmationChecked, setConfirmationChecked] = useState(false);
 
   // Validation logic
   useEffect(() => {
+    const hasEligibilitySection = data?.sections?.some(s => 
+      s.key?.toUpperCase().includes('ELIGIBILITY') || s.title?.toUpperCase().includes('ELIGIBILITY')
+    );
+    const hasEvaluationSection = data?.sections?.some(s => 
+      s.key?.toUpperCase().includes('EVALUATION') || s.title?.toUpperCase().includes('EVALUATION')
+    );
+    const hasEligibilityContent = data?.sections?.find(s => 
+      s.key?.toUpperCase().includes('ELIGIBILITY') || s.title?.toUpperCase().includes('ELIGIBILITY')
+    )?.content?.trim();
+    const hasEvaluationContent = data?.sections?.find(s => 
+      s.key?.toUpperCase().includes('EVALUATION') || s.title?.toUpperCase().includes('EVALUATION')
+    )?.content?.trim();
+
     const checks = {
       hasTitle: {
         passed: Boolean(data?.basicInfo?.title?.trim()),
@@ -57,6 +72,14 @@ export default function StepReviewPublish({ data, onValidationChange }) {
                   .filter(s => s.mandatory)
                   .every(s => s.content && s.content.trim().length >= 50),
         label: "All mandatory sections completed (min 50 chars)",
+      },
+      hasEligibility: {
+        passed: hasEligibilitySection && hasEligibilityContent,
+        label: "Eligibility Criteria section with content",
+      },
+      hasEvaluation: {
+        passed: hasEvaluationSection && hasEvaluationContent,
+        label: "Evaluation Criteria section with content",
       },
     };
 
@@ -255,8 +278,11 @@ export default function StepReviewPublish({ data, onValidationChange }) {
           <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
             <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Validation Checklist
+                Readiness Checklist
               </h3>
+              <p className="text-xs text-neutral-600 mt-1">
+                All items must be completed before publishing
+              </p>
             </div>
             <div className="p-4">
               <div className="space-y-3">
@@ -282,19 +308,94 @@ export default function StepReviewPublish({ data, onValidationChange }) {
                     <CheckCircle2 className="w-5 h-5" />
                     <span className="text-sm font-semibold">All checks passed</span>
                   </div>
+                  <p className="text-xs text-neutral-600 mt-2">
+                    Tender is ready for publication
+                  </p>
                 </div>
               ) : (
                 <div className="mt-4 pt-4 border-t border-neutral-200">
                   <div className="flex items-start gap-2 text-red-700">
                     <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm font-medium">
-                      Fix all issues before publishing
-                    </span>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium block">
+                        {Object.values(validationChecks).filter(c => !c.passed).length} issue(s) remaining
+                      </span>
+                      <span className="text-xs text-red-600 mt-1 block">
+                        Fix all issues before publishing
+                      </span>
+                    </div>
                   </div>
+                  {onGoBack && (
+                    <button
+                      onClick={onGoBack}
+                      className="mt-3 w-full px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Go back to fix issues
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           </div>
+
+          {/* Confirmation Checkbox */}
+          {allValid && !published && (
+            <div className="bg-white border border-neutral-200 rounded-lg p-4">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={confirmationChecked}
+                  onChange={(e) => setConfirmationChecked(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-green-600 border-neutral-300 rounded focus:ring-green-500"
+                  disabled={published || isPublishing}
+                />
+                <span className="text-sm text-neutral-700 leading-relaxed">
+                  I confirm that the above tender details are accurate, complete, and ready for publication. 
+                  I understand that this tender cannot be edited once published.
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* Publish Button */}
+          {!published && (
+            <button
+              onClick={onPublish}
+              disabled={!allValid || !confirmationChecked || isPublishing}
+              className={`w-full px-4 py-3 text-sm font-semibold rounded-lg transition-all ${
+                allValid && confirmationChecked && !isPublishing
+                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                  : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
+              }`}
+            >
+              {isPublishing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Publishing Tender...
+                </span>
+              ) : (
+                'Publish Tender'
+              )}
+            </button>
+          )}
+
+          {published && (
+            <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="text-sm font-semibold">
+                  Tender Published Successfully
+                </span>
+              </div>
+              <p className="text-xs text-green-600 mt-2">
+                Redirecting to dashboard...
+              </p>
+            </div>
+          )}
 
           {/* Warning Message */}
           <div className="bg-red-50 border-2 border-red-300 rounded-lg overflow-hidden">

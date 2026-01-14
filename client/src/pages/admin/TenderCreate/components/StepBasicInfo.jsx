@@ -10,6 +10,20 @@ const TENDER_TYPES = [
   "Request for Quotation (RFQ)",
 ];
 
+const SECTORS = [
+  "Construction & Infrastructure",
+  "IT & Software Development",
+  "Consulting Services",
+  "Supply & Procurement",
+  "Healthcare & Medical",
+  "Education & Training",
+  "Security Services",
+  "Maintenance & Facilities",
+  "Transportation",
+  "Utilities",
+  "Other",
+];
+
 const generateReferenceId = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -24,6 +38,7 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
     authorityName: data?.authorityName || "",
     referenceId: data?.referenceId || generateReferenceId(),
     tenderType: data?.tenderType || "",
+    sector: data?.sector || "",
     estimatedValue: data?.estimatedValue || "",
     submissionStartDate: data?.submissionStartDate || "",
     submissionEndDate: data?.submissionEndDate || "",
@@ -53,6 +68,10 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
 
     if (!formData.tenderType) {
       newErrors.tenderType = "Tender type is required";
+    }
+
+    if (!formData.sector) {
+      newErrors.sector = "Sector is required";
     }
 
     if (!formData.estimatedValue) {
@@ -224,7 +243,7 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
             </div>
           </div>
 
-          {/* Tender Type & Estimated Value - Two Columns */}
+          {/* Tender Type & Sector - Two Columns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Tender Type */}
             <div>
@@ -258,32 +277,64 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
               )}
             </div>
 
-            {/* Estimated Value */}
+            {/* Sector */}
             <div>
               <label className="block text-sm font-medium text-neutral-900 mb-2">
-                Estimated Value (₹) <span className="text-red-500">*</span>
+                Sector <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                value={formData.estimatedValue}
-                onChange={(e) => handleChange("estimatedValue", e.target.value)}
-                onBlur={() => handleBlur("estimatedValue")}
-                placeholder="e.g., 5000000"
-                className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-colors ${
-                  showError("estimatedValue")
+              <select
+                value={formData.sector}
+                onChange={(e) => handleChange("sector", e.target.value)}
+                onBlur={() => handleBlur("sector")}
+                className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 focus:outline-none focus:ring-2 transition-colors ${
+                  showError("sector")
                     ? "border-red-300 focus:ring-red-100 focus:border-red-400"
                     : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
                 }`}
-              />
-              {showError("estimatedValue") && (
+              >
+                <option value="">Select sector</option>
+                {SECTORS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              {showError("sector") && (
                 <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
                   <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  {errors.estimatedValue}
+                  {errors.sector}
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Estimated Value - Single Column */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-900 mb-2">
+              Estimated Value (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.estimatedValue}
+              onChange={(e) => handleChange("estimatedValue", e.target.value)}
+              onBlur={() => handleBlur("estimatedValue")}
+              placeholder="e.g., 5000000"
+              className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-colors ${
+                showError("estimatedValue")
+                  ? "border-red-300 focus:ring-red-100 focus:border-red-400"
+                  : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
+              }`}
+            />
+            {showError("estimatedValue") && (
+              <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {errors.estimatedValue}
+              </p>
+            )}
           </div>
 
           {/* Submission Start & End Date - Two Columns */}

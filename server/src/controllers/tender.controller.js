@@ -121,7 +121,7 @@ export async function publishTender(req, res, next) {
       err.message.includes('already published') ||
       err.message.includes('without sections')
     ) {
-      return res.status(403).json({ error: err.message });
+      return res.status(400).json({ error: err.message });
     }
     next(err);
   }
@@ -133,13 +133,13 @@ export async function publishTender(req, res, next) {
 export async function addSection(req, res, next) {
   try {
     const { id } = req.params;
-    const { title, is_mandatory } = req.body;
+    const { title, is_mandatory, content, section_key, description } = req.body;
 
     if (!title) {
       return res.status(400).json({ error: 'Section title is required' });
     }
 
-    const section = await TenderService.addSection(id, title, is_mandatory, req.user);
+    const section = await TenderService.addSection(id, { title, is_mandatory, content, section_key, description }, req.user);
 
     res.status(201).json(section);
   } catch (err) {

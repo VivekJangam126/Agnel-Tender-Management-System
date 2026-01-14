@@ -46,3 +46,37 @@ export async function generateTenderAI(req, res, next) {
     next(err);
   }
 }
+
+export async function assistTenderDrafting(req, res, next) {
+  try {
+    const { mode, sectionType, existingContent, tenderMetadata, userQuestion } = req.body;
+
+    if (!mode || existingContent === undefined || !userQuestion) {
+      return res.status(400).json({
+        error: 'mode, existingContent, and userQuestion are required. existingContent can be empty but must be provided.'
+      });
+    }
+
+    if (mode !== 'section' && mode !== 'tender') {
+      return res.status(400).json({ error: 'mode must be "section" or "tender"' });
+    }
+
+    try {
+      const suggestions = await AIService.assistTenderDrafting({
+        mode,
+        sectionType,
+        existingContent,
+        tenderMetadata,
+        userQuestion,
+      });
+      res.json({ suggestions });
+    } catch (err) {
+      if (err.message?.includes('API')) {
+        return res.status(503).json({ error: 'AI service unavailable. Please try again.' });
+      }
+      throw err;
+    }
+  } catch (err) {
+    next(err);
+  }
+}

@@ -14,6 +14,7 @@ const migrations = [
   '005_create_tender_content_chunk.sql',
   '006_create_proposal.sql',
   '007_create_proposal_section_response.sql',
+  '008_tender_creation_flow_enhancements.sql',
 ];
 
 async function runMigrations() {
