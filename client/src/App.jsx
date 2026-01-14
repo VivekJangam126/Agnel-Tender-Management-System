@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import PublicLayout from "./layouts/PublicLayout";
 import AdminLayout from "./layouts/AdminLayout";
-import BidderLayout from "./layouts/BidderLayout";
 import ProtectedRoute from "./components/shared/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -21,10 +20,13 @@ import AdminDashboard from "./pages/admin/Dashboard/Dashboard";
 import TendersList from "./pages/admin/TendersList/TendersList";
 import TenderView from "./pages/admin/TenderView/TenderView";
 import BidderDashboard from "./pages/bidder/Dashboard/Dashboard";
-import BidderProfile from "./pages/bidder/Profile/Profile";
-import BidderProposals from "./pages/bidder/Proposals/Proposals";
-import BidderSaved from "./pages/bidder/Saved/Saved";
-import ProposalDraft from "./pages/bidder/ProposalDraft/ProposalDraft";
+import BidderTenderDiscovery from "./pages/bidder/BidderTenderDiscovery";
+import TenderAnalysis from "./pages/bidder/TenderAnalysis";
+import ProposalEdit from "./pages/bidder/ProposalEdit";
+import ProposalWorkspace from "./pages/bidder/ProposalWorkspace";
+import ProposalDrafting from "./pages/bidder/ProposalDrafting";
+import BidderHistory from "./pages/bidder/BidderHistory";
+import AnalyzePage from "./pages/bidder/AnalyzePage";
 import TenderCreate from "./pages/admin/TenderCreate/TenderCreate";
 import Analytics from "./pages/admin/Analytics/Analytics";
 import Profile from "./pages/admin/Profile/Profile";
@@ -77,17 +79,14 @@ export default function App() {
 
           {/* Bidder Routes - All protected with bidder role */}
           <Route element={<ProtectedRoute allowedRoles={["bidder"]} />}>
-            <Route path="/bidder" element={<BidderLayout />}>
-              <Route path="dashboard" element={<BidderDashboard />} />
-              <Route path="saved-tenders" element={<BidderSaved />} />
-              <Route
-                path="saved"
-                element={<Navigate to="/bidder/saved-tenders" replace />}
-              />
-              <Route path="proposals" element={<BidderProposals />} />
-              <Route path="proposals/:proposalId" element={<ProposalDraft />} />
-              <Route path="profile" element={<BidderProfile />} />
-            </Route>
+            <Route path="/bidder/dashboard" element={<BidderDashboard />} />
+            <Route path="/bidder/tenders" element={<BidderTenderDiscovery />} />
+            <Route path="/bidder/analyze" element={<AnalyzePage />} />
+            <Route path="/bidder/tenders/:id/analyze" element={<TenderAnalysis />} />
+            <Route path="/bidder/proposals/:id" element={<ProposalEdit />} />
+            <Route path="/bidder/proposal/:tenderId" element={<ProposalWorkspace />} />
+            <Route path="/bidder/proposal-drafting" element={<ProposalDrafting />} />
+            <Route path="/bidder/history" element={<BidderHistory />} />
           </Route>
 
           {/* Fallback */}

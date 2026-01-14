@@ -25,10 +25,10 @@ export function AuthProvider({ children }) {
 	}, []);
 
 	const persist = (tokenValue, userValue) => {
-		setToken(tokenValue);
-		setUser(userValue);
 		localStorage.setItem('tms_token', tokenValue);
 		localStorage.setItem('tms_user', JSON.stringify(userValue));
+		setToken(tokenValue);
+		setUser(userValue);
 	};
 
 	const login = async (email, password) => {

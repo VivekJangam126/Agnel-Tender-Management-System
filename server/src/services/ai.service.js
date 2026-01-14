@@ -488,6 +488,45 @@ If content is adequate, respond with: "No improvements needed for this request."
       return mockSuggestions;
     }
   },
+
+  /**
+   * Analyze a proposal section response against tender requirement
+   * Returns advisory guidance (no auto-write, no auto-apply)
+   */
+  async analyzeProposalSection(sectionType, draftContent, tenderRequirement = '', userQuestion = '') {
+    try {
+      // If no API key, return structured fallback
+      if (!env.OPENAI_API_KEY) {
+        return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
+      }
+
+      const prompt = `You are a tender proposal assistant. Analyze this proposal section response.
+
+Section Type: ${sectionType}
+Tender Requirement: ${tenderRequirement || '(No specific requirement provided)'}
+Draft Content: ${draftContent}
+User Question: ${userQuestion || 'General analysis'}
+
+Provide ONE piece of advisory guidance in this format:
+- observation: What's missing or could be improved
+- suggestedText: A sample sentence or paragraph (NOT to be auto-applied, just for reference)
+- reason: Why this matters in government/tender context
+
+Focus on: Completeness, clarity, compliance with government standards, risk mitigation.`;
+
+      const response = await callChatCompletion(prompt);
+
+      // Parse response or provide fallback
+      const suggestion = parseSectionGuidance(response, sectionType) || 
+                        generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
+
+      return suggestion;
+    } catch (err) {
+      console.error('Section analysis error:', err.message);
+      // Graceful fallback for any error
+      return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
+    }
+  },
 };
 
 /**
@@ -541,5 +580,94 @@ function parseAISuggestions(response) {
     suggestedText: '',
     reason: 'Consider reviewing the content for completeness.'
   }];
+}
+/**
+ * Analyze a proposal section response against tender requirement
+ * Returns advisory guidance (no auto-write, no auto-apply)
+ */
+export async function analyzeProposalSection(sectionType, draftContent, tenderRequirement = '', userQuestion = '') {
+  return AIService.analyzeProposalSection(sectionType, draftContent, tenderRequirement, userQuestion);
+}
+
+/**
+ * Parse structured section guidance from AI response
+ */
+function parseSectionGuidance(response, sectionType) {
+  try {
+    // Extract observation
+    const obsMatch = response.match(/observation:\s*(.+?)(?=suggested|reason|$)/i);
+    const observation = obsMatch?.[1]?.trim() || '';
+
+    // Extract suggested text
+    const textMatch = response.match(/suggested[^:]*:\s*(.+?)(?=reason|$)/i);
+    const suggestedText = textMatch?.[1]?.trim() || '';
+
+    // Extract reason
+    const reasonMatch = response.match(/reason:\s*(.+?)$/i);
+    const reason = reasonMatch?.[1]?.trim() || '';
+
+    if (observation && reason) {
+      return {
+        observation,
+        suggestedText: suggestedText || 'Review your draft against the tender requirements',
+        reason,
+        isAI: true
+      };
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Generate rule-based fallback guidance when AI is unavailable
+ */
+function generateFallbackSectionGuidance(sectionType, draftContent = '', tenderRequirement = '') {
+  const fallbackGuidance = {
+    ELIGIBILITY: {
+      observation: 'Eligibility criteria should include certifications and experience requirements',
+      suggestedText: 'Ensure your organization has valid registrations and minimum 3+ years of relevant experience.',
+      reason: 'Government tenders require documented proof of bidder capability and compliance history.'
+    },
+    TECHNICAL: {
+      observation: 'Technical response should reference relevant standards and quality assurance processes',
+      suggestedText: 'Specify alignment with ISO/ISI standards and third-party verification mechanisms.',
+      reason: 'Technical compliance ensures project success and reduces execution risk.'
+    },
+    FINANCIAL: {
+      observation: 'Financial proposal should clearly break down costs and payment terms',
+      suggestedText: 'Include itemized costs, EMD details, and milestone-based payment terms.',
+      reason: 'Financial clarity prevents disputes and ensures financial accountability.'
+    },
+    EVALUATION: {
+      observation: 'Evaluation criteria should be transparent and objectively scored',
+      suggestedText: 'Define clear scoring weights: Technical (60%) + Financial (40%)',
+      reason: 'Transparent evaluation ensures fairness and defensibility of tender award.'
+    },
+    TERMS: {
+      observation: 'Terms and conditions should address risk allocation and dispute resolution',
+      suggestedText: 'Include provisions for penalties, warranties, and arbitration clauses.',
+      reason: 'Clear terms protect both parties and enable smooth project execution.'
+    }
+  };
+
+  const guidance = fallbackGuidance[sectionType] || {
+    observation: 'Review your content for completeness and clarity',
+    suggestedText: 'Ensure all required information is included and well-structured.',
+    reason: 'Comprehensive proposals increase chances of approval and successful execution.'
+  };
+
+  // Check content length
+  const contentLength = (draftContent || '').trim().length;
+  if (contentLength < 50) {
+    guidance.observation = 'Content is too brief. Consider expanding with more detail.';
+    guidance.suggestedText = 'Add specific examples, timelines, or supporting documentation.';
+  }
+
+  return {
+    ...guidance,
+    isFallback: true
+  };
 }
 

@@ -13,6 +13,7 @@ import aiRoutes from './routes/ai.routes.js';
 import proposalRoutes from './routes/proposal.routes.js';
 import evaluationRoutes from './routes/evaluation.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
+import bidderRoutes from './routes/bidder.routes.js';
 
 // Error handler
 import { errorHandler } from './middlewares/error.middleware.js';
@@ -43,6 +44,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tenders', tenderRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/proposals', proposalRoutes);
+app.use('/api/bidder', bidderRoutes);
 app.use('/api/evaluation', evaluationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 

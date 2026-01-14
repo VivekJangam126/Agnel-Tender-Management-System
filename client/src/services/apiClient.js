@@ -1,5 +1,5 @@
-// Default to the server's configured port (5175) unless a VITE_API_URL override is provided.
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5175/api';
+// Default to the backend server (5000) unless a VITE_API_URL override is provided.
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export async function apiRequest(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' };

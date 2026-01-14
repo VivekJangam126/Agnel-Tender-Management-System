@@ -196,11 +196,16 @@ export const ProposalService = {
    */
   async listForBidder(user) {
     const res = await pool.query(
-      `SELECT p.proposal_id, p.tender_id, p.organization_id, p.status, p.created_at,
-              t.title as tender_title, t.status as tender_status
+      `SELECT p.proposal_id, p.tender_id, p.organization_id, p.status, p.created_at, p.updated_at,
+              t.title as tender_title, t.status as tender_status,
+              COUNT(DISTINCT ts.section_id) as total_sections,
+              COUNT(DISTINCT CASE WHEN psr.content IS NOT NULL AND LENGTH(TRIM(psr.content)) >= 50 THEN psr.section_id END) as completed_sections
        FROM proposal p
        JOIN tender t ON p.tender_id = t.tender_id
+       LEFT JOIN tender_section ts ON t.tender_id = ts.tender_id
+       LEFT JOIN proposal_section_response psr ON p.proposal_id = psr.proposal_id AND ts.section_id = psr.section_id
        WHERE p.organization_id = $1
+       GROUP BY p.proposal_id, p.tender_id, p.organization_id, p.status, p.created_at, p.updated_at, t.title, t.status
        ORDER BY p.created_at DESC`,
       [user.organizationId]
     );

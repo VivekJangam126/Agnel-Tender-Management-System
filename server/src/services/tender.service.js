@@ -239,7 +239,7 @@ export const TenderService = {
 
     // Get sections for this tender
     const sectionsResult = await pool.query(
-      `SELECT section_id, tender_id, title, order_index, is_mandatory, created_at
+      `SELECT section_id, tender_id, title, description, content, order_index, is_mandatory, created_at
        FROM tender_section
        WHERE tender_id = $1
        ORDER BY order_index ASC`,
