@@ -1,4 +1,4 @@
-export default function StatsCard({ title, value, tone = "neutral" }) {
+export default function StatsCard({ title, value, tone = "neutral", loading = false }) {
   const toneClasses = {
     neutral: {
       value: "text-neutral-900",
@@ -24,8 +24,17 @@ export default function StatsCard({ title, value, tone = "neutral" }) {
 
   return (
     <div className={`${c.bg} p-6 rounded-lg border ${c.border}`}>
-      <div className={`text-2xl font-bold ${c.value}`}>{value}</div>
-      <div className={`text-sm mt-1 ${c.label}`}>{title}</div>
+      {loading ? (
+        <>
+          <div className="h-8 bg-neutral-200 rounded animate-pulse w-16 mb-2"></div>
+          <div className="h-4 bg-neutral-100 rounded animate-pulse w-24"></div>
+        </>
+      ) : (
+        <>
+          <div className={`text-2xl font-bold ${c.value}`}>{value}</div>
+          <div className={`text-sm mt-1 ${c.label}`}>{title}</div>
+        </>
+      )}
     </div>
   );
 }

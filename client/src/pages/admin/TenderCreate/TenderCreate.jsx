@@ -9,7 +9,7 @@ import StepReviewPublish from "./components/StepReviewPublish";
 
 const STEPS = [
   { id: 1, label: "Basic Information" },
-  { id: 2, label: "Content Builder" },
+  { id: 2, label: "Tender Content & Eligibility" },
   { id: 3, label: "Review & Publish" },
 ];
 
@@ -30,7 +30,6 @@ export default function TenderCreate() {
   const [published, setPublished] = useState(false);
   const [loading, setLoading] = useState(!!editTenderId);
 
-  // Load existing tender for editing
   useEffect(() => {
     async function loadTender() {
       if (!editTenderId) return;
@@ -44,17 +43,23 @@ export default function TenderCreate() {
         setTenderId(tender.tender_id);
         setTenderDraft({
           basicInfo: {
-            title: tender.title,
-            description: tender.description,
-            submissionDeadline: tender.submission_deadline?.split('T')[0],
+            title: tender.title || "",
+            authorityName: tender.authority_name || "",
+            referenceId: tender.reference_id || "",
+            tenderType: tender.tender_type || "",
+            estimatedValue: tender.estimated_value || "",
+            submissionStartDate: tender.submission_start_date?.split('T')[0] || "",
+            submissionEndDate: tender.submission_deadline?.split('T')[0] || "",
+            description: tender.description || "",
           },
           sections: (tender.sections || []).map(s => ({
+            key: s.section_key || `section_${s.section_id}`,
             section_id: s.section_id,
-            id: s.section_id,
             title: s.title,
+            description: s.description || "",
+            content: s.content || "",
             mandatory: s.is_mandatory,
             order: s.order_index,
-            _saved: true,
           })),
           metadata: {},
         });
@@ -73,47 +78,55 @@ export default function TenderCreate() {
       setIsSaving(true);
       try {
         if (currentStep === 1) {
+          const payload = {
+            title: tenderDraft.basicInfo.title,
+            description: tenderDraft.basicInfo.description,
+            submission_deadline: tenderDraft.basicInfo.submissionEndDate,
+            // Note: These additional fields may need backend schema updates
+            authority_name: tenderDraft.basicInfo.authorityName,
+            reference_id: tenderDraft.basicInfo.referenceId,
+            tender_type: tenderDraft.basicInfo.tenderType,
+            estimated_value: tenderDraft.basicInfo.estimatedValue,
+            submission_start_date: tenderDraft.basicInfo.submissionStartDate,
+          };
+
           if (tenderId) {
             // Edit mode: update existing tender
-            await tenderService.updateTender(
-              tenderId,
-              {
-                title: tenderDraft.basicInfo.title,
-                description: tenderDraft.basicInfo.description,
-                submission_deadline: tenderDraft.basicInfo.submissionDeadline,
-              },
-              token
-            );
+            await tenderService.updateTender(tenderId, payload, token);
           } else {
             // Create mode: create new tender draft
-            const created = await tenderService.createTender(
-              {
-                title: tenderDraft.basicInfo.title,
-                description: tenderDraft.basicInfo.description,
-                submission_deadline: tenderDraft.basicInfo.submissionDeadline,
-              },
-              token
-            );
+            const created = await tenderService.createTender(payload, token);
             setTenderId(created.tender_id);
           }
         } else if (currentStep === 2 && tenderId) {
-          // Step 2: Add/update sections and mark them as saved
+          // Step 2: Save all sections with content
           for (const section of tenderDraft.sections) {
-            if (!section.section_id && !section._saved) {
+            if (!section.section_id) {
+              // Create new section
               const created = await tenderService.addSection(
                 tenderId,
-                { title: section.title, is_mandatory: section.mandatory },
+                { 
+                  title: section.title,
+                  is_mandatory: section.mandatory,
+                  content: section.content || "",
+                  section_key: section.key,
+                  description: section.description || "",
+                },
                 token
               );
               section.section_id = created.section_id;
-              section._saved = true;
-            } else if (section._updated) {
+            } else {
+              // Update existing section
               await tenderService.updateSection(
                 section.section_id,
-                { title: section.title, is_mandatory: section.mandatory },
+                { 
+                  title: section.title,
+                  is_mandatory: section.mandatory,
+                  content: section.content || "",
+                  description: section.description || "",
+                },
                 token
               );
-              section._updated = false;
             }
           }
         }
@@ -134,36 +147,51 @@ export default function TenderCreate() {
   };
 
   const handlePublish = async () => {
-    if (!tenderId) return;
+    if (!tenderId) {
+      setError("Tender ID not found. Please try again.");
+      return;
+    }
+
+    // Final confirmation
+    const confirmed = window.confirm(
+      "⚠️ IMPORTANT WARNING ⚠️\n\n" +
+      "Once published, this tender CANNOT be edited or deleted.\n" +
+      "The document will be immediately available to all bidders.\n\n" +
+      "Are you absolutely sure you want to publish this tender?"
+    );
+
+    if (!confirmed) return;
+
     setError(null);
     setIsSaving(true);
     try {
       // Ensure all sections are saved before publishing
       for (const section of tenderDraft.sections) {
-        if (!section.section_id && !section._saved) {
+        if (!section.section_id) {
           const created = await tenderService.addSection(
             tenderId,
-            { title: section.title, is_mandatory: section.mandatory },
+            { 
+              title: section.title,
+              is_mandatory: section.mandatory,
+              content: section.content || "",
+              section_key: section.key,
+              description: section.description || "",
+            },
             token
           );
           section.section_id = created.section_id;
-          section._saved = true;
-        } else if (section._updated) {
-          await tenderService.updateSection(
-            section.section_id,
-            { title: section.title, is_mandatory: section.mandatory },
-            token
-          );
-          section._updated = false;
         }
       }
-      
+
+      // Single publish call - this is the ONLY publish path
       await tenderService.publishTender(tenderId, token);
+      
       setPublished(true);
-      // Redirect to dashboard after short delay
+      
+      // Redirect to dashboard after success
       setTimeout(() => navigate('/admin/dashboard'), 1500);
     } catch (err) {
-      setError(err.message || "Failed to publish");
+      setError(err.message || "Failed to publish tender");
     } finally {
       setIsSaving(false);
     }
@@ -192,14 +220,12 @@ export default function TenderCreate() {
             data={tenderDraft.sections}
             onUpdate={(data) => updateTenderDraft("sections", data)}
             onValidationChange={setIsStepValid}
-            tenderMetadata={tenderDraft.basicInfo}
           />
         );
       case 3:
         return (
           <StepReviewPublish
             data={tenderDraft}
-            onUpdate={updateTenderDraft}
             onValidationChange={setIsStepValid}
           />
         );

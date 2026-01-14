@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { 
   CheckCircle2, 
   XCircle, 
@@ -12,10 +11,8 @@ import {
   DollarSign
 } from "lucide-react";
 
-export default function StepReviewPublish({ data, onUpdate, onValidationChange }) {
-  const navigate = useNavigate();
+export default function StepReviewPublish({ data, onValidationChange }) {
   const [validationChecks, setValidationChecks] = useState({});
-  const [isPublishing, setIsPublishing] = useState(false);
 
   // Validation logic
   useEffect(() => {
@@ -24,29 +21,42 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
         passed: Boolean(data?.basicInfo?.title?.trim()),
         label: "Tender title is present",
       },
+      hasAuthorityName: {
+        passed: Boolean(data?.basicInfo?.authorityName?.trim()),
+        label: "Authority/Department name provided",
+      },
+      hasReferenceId: {
+        passed: Boolean(data?.basicInfo?.referenceId?.trim()),
+        label: "Reference ID is set",
+      },
+      hasTenderType: {
+        passed: Boolean(data?.basicInfo?.tenderType),
+        label: "Tender type selected",
+      },
+      hasEstimatedValue: {
+        passed: Boolean(data?.basicInfo?.estimatedValue) && Number(data.basicInfo.estimatedValue) > 0,
+        label: "Valid estimated value provided",
+      },
+      validDates: {
+        passed: Boolean(data?.basicInfo?.submissionStartDate && data?.basicInfo?.submissionEndDate) && 
+                 new Date(data.basicInfo.submissionEndDate) > new Date(data.basicInfo.submissionStartDate) &&
+                 new Date(data.basicInfo.submissionEndDate) > new Date(),
+        label: "Valid submission dates set",
+      },
       hasDescription: {
         passed: Boolean(data?.basicInfo?.description?.trim()),
-        label: "Short description provided",
-      },
-      hasCategory: {
-        passed: Boolean(data?.basicInfo?.category),
-        label: "Category selected",
-      },
-      validDeadline: {
-        passed: Boolean(data?.basicInfo?.submissionDeadline) && 
-                 new Date(data.basicInfo.submissionDeadline) > new Date(),
-        label: "Valid submission deadline set",
+        label: "Description provided",
       },
       hasSections: {
         passed: Array.isArray(data?.sections) && data.sections.length > 0,
-        label: "At least one section created",
+        label: "Tender sections created",
       },
       mandatoryCompleted: {
         passed: Array.isArray(data?.sections) && 
                 data.sections
                   .filter(s => s.mandatory)
-                  .every(s => s.content && s.content.trim().length > 0),
-        label: "All mandatory sections have content",
+                  .every(s => s.content && s.content.trim().length >= 50),
+        label: "All mandatory sections completed (min 50 chars)",
       },
     };
 
@@ -57,34 +67,7 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
     if (onValidationChange) {
       onValidationChange(allPassed);
     }
-  }, [data]);
-
-  const handlePublish = async () => {
-    const confirmed = window.confirm(
-      "IMPORTANT: Once published, this tender cannot be edited or deleted.\n\n" +
-      "Are you absolutely sure you want to publish this tender?"
-    );
-
-    if (!confirmed) return;
-
-    setIsPublishing(true);
-
-    // Simulate publish API call
-    setTimeout(() => {
-      // Mock publish action
-      console.log("Publishing tender:", {
-        ...data,
-        status: "PUBLISHED",
-        publishedAt: new Date().toISOString(),
-        publishedBy: "Admin User",
-      });
-
-      alert("✅ Tender published successfully!");
-      
-      // Redirect to admin dashboard
-      navigate("/admin/dashboard");
-    }, 1500);
-  };
+  }, [data, onValidationChange]);
 
   const allValid = Object.values(validationChecks).every(check => check.passed);
 
@@ -134,9 +117,9 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
                 <div className="flex items-start gap-3">
                   <Building className="w-4 h-4 text-neutral-500 mt-0.5" />
                   <div>
-                    <p className="text-xs text-neutral-500">Issuing Organization</p>
+                    <p className="text-xs text-neutral-500">Authority/Department</p>
                     <p className="text-sm font-medium text-neutral-900 mt-0.5">
-                      {data?.basicInfo?.issuingOrganization || "Not specified"}
+                      {data?.basicInfo?.authorityName || "Not specified"}
                     </p>
                   </div>
                 </div>
@@ -144,9 +127,31 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
                 <div className="flex items-start gap-3">
                   <Tag className="w-4 h-4 text-neutral-500 mt-0.5" />
                   <div>
-                    <p className="text-xs text-neutral-500">Category</p>
+                    <p className="text-xs text-neutral-500">Reference ID</p>
                     <p className="text-sm font-medium text-neutral-900 mt-0.5">
-                      {data?.basicInfo?.category || "Not specified"}
+                      {data?.basicInfo?.referenceId || "Not specified"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <Tag className="w-4 h-4 text-neutral-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-neutral-500">Tender Type</p>
+                    <p className="text-sm font-medium text-neutral-900 mt-0.5">
+                      {data?.basicInfo?.tenderType || "Not specified"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <DollarSign className="w-4 h-4 text-neutral-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-neutral-500">Estimated Value</p>
+                    <p className="text-sm font-medium text-neutral-900 mt-0.5">
+                      {data?.basicInfo?.estimatedValue 
+                        ? `₹ ${Number(data.basicInfo.estimatedValue).toLocaleString('en-IN')}`
+                        : "Not specified"}
                     </p>
                   </div>
                 </div>
@@ -154,10 +159,10 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
                 <div className="flex items-start gap-3">
                   <Calendar className="w-4 h-4 text-neutral-500 mt-0.5" />
                   <div>
-                    <p className="text-xs text-neutral-500">Submission Deadline</p>
+                    <p className="text-xs text-neutral-500">Submission Start</p>
                     <p className="text-sm font-medium text-neutral-900 mt-0.5">
-                      {data?.basicInfo?.submissionDeadline 
-                        ? new Date(data.basicInfo.submissionDeadline).toLocaleDateString('en-IN', {
+                      {data?.basicInfo?.submissionStartDate 
+                        ? new Date(data.basicInfo.submissionStartDate).toLocaleDateString('en-IN', {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric'
@@ -167,17 +172,21 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
                   </div>
                 </div>
 
-                {data?.basicInfo?.estimatedValue && (
-                  <div className="flex items-start gap-3">
-                    <DollarSign className="w-4 h-4 text-neutral-500 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-neutral-500">Estimated Value</p>
-                      <p className="text-sm font-medium text-neutral-900 mt-0.5">
-                        ₹ {Number(data.basicInfo.estimatedValue).toLocaleString('en-IN')}
-                      </p>
-                    </div>
+                <div className="flex items-start gap-3">
+                  <Calendar className="w-4 h-4 text-neutral-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-neutral-500">Submission End</p>
+                    <p className="text-sm font-medium text-neutral-900 mt-0.5">
+                      {data?.basicInfo?.submissionEndDate 
+                        ? new Date(data.basicInfo.submissionEndDate).toLocaleDateString('en-IN', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })
+                        : "Not specified"}
+                    </p>
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
@@ -190,7 +199,7 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
               {data?.sections && data.sections.length > 0 ? (
                 <div className="space-y-6">
                   {data.sections.map((section, index) => (
-                    <div key={section.id} className="pb-6 border-b border-neutral-200 last:border-b-0 last:pb-0">
+                    <div key={section.key || section.id} className="pb-6 border-b border-neutral-200 last:border-b-0 last:pb-0">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-mono text-neutral-500">
@@ -307,20 +316,12 @@ export default function StepReviewPublish({ data, onUpdate, onValidationChange }
             </div>
           </div>
 
-          {/* Publish Button */}
-          <button
-            onClick={handlePublish}
-            disabled={!allValid || isPublishing}
-            className="w-full px-6 py-3.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-neutral-300 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            <Lock className="w-4 h-4" />
-            {isPublishing ? "Publishing..." : "Publish Tender"}
-          </button>
-
           {!allValid && (
-            <p className="text-xs text-center text-neutral-500">
-              Complete all validation checks to enable publishing
-            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-sm text-amber-900 font-medium">
+                Complete all validation checks before publishing
+              </p>
+            </div>
           )}
         </div>
       </div>

@@ -32,12 +32,16 @@ export default function PublishedTenderList({ tenders = [] }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              to="#"
-              onClick={(e) => e.preventDefault()}
-              className="px-3 py-2 rounded-md border border-neutral-300 bg-white text-neutral-700 text-sm font-medium hover:bg-neutral-50"
-              title="Read-only view"
+              to={`/admin/tender/view/${t.id}`}
+              className="px-3 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
             >
-              View Tender
+              View
+            </Link>
+            <Link
+              to={`/admin/bid-evaluation/${t.id}`}
+              className="px-3 py-2 rounded-md border border-neutral-300 bg-white text-neutral-700 text-sm font-medium hover:bg-neutral-50 transition-colors"
+            >
+              Evaluate
             </Link>
           </div>
         </div>

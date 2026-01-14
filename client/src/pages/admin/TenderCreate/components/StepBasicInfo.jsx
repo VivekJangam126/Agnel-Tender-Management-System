@@ -1,25 +1,33 @@
 import { useState, useEffect } from "react";
 
-const CATEGORIES = [
-  "Construction & Infrastructure",
-  "IT & Software Development",
-  "Consulting Services",
-  "Supply & Procurement",
-  "Healthcare & Medical",
-  "Education & Training",
-  "Security Services",
-  "Maintenance & Facilities",
-  "Other",
+const TENDER_TYPES = [
+  "Open Tender",
+  "Limited Tender",
+  "Single Source",
+  "Two-Stage Tender",
+  "Framework Agreement",
+  "Request for Proposal (RFP)",
+  "Request for Quotation (RFQ)",
 ];
+
+const generateReferenceId = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `TND-${year}${month}-${random}`;
+};
 
 export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
   const [formData, setFormData] = useState({
     title: data?.title || "",
-    description: data?.description || "",
-    category: data?.category || "",
+    authorityName: data?.authorityName || "",
+    referenceId: data?.referenceId || generateReferenceId(),
+    tenderType: data?.tenderType || "",
     estimatedValue: data?.estimatedValue || "",
-    submissionDeadline: data?.submissionDeadline || "",
-    issuingOrganization: "Government of Maharashtra", // Mock read-only
+    submissionStartDate: data?.submissionStartDate || "",
+    submissionEndDate: data?.submissionEndDate || "",
+    description: data?.description || "",
   });
 
   const [errors, setErrors] = useState({});
@@ -35,32 +43,49 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
       newErrors.title = "Title must be at least 10 characters";
     }
 
-    if (!formData.description.trim()) {
-      newErrors.description = "Short description is required";
-    } else if (formData.description.length > 300) {
-      newErrors.description = "Description must not exceed 300 characters";
-    } else if (formData.description.length < 20) {
-      newErrors.description = "Description must be at least 20 characters";
+    if (!formData.authorityName.trim()) {
+      newErrors.authorityName = "Authority/Department name is required";
     }
 
-    if (!formData.category) {
-      newErrors.category = "Category is required";
+    if (!formData.referenceId.trim()) {
+      newErrors.referenceId = "Reference ID is required";
     }
 
-    if (!formData.submissionDeadline) {
-      newErrors.submissionDeadline = "Submission deadline is required";
-    } else {
-      const selectedDate = new Date(formData.submissionDeadline);
+    if (!formData.tenderType) {
+      newErrors.tenderType = "Tender type is required";
+    }
+
+    if (!formData.estimatedValue) {
+      newErrors.estimatedValue = "Estimated value is required";
+    } else if (isNaN(Number(formData.estimatedValue)) || Number(formData.estimatedValue) <= 0) {
+      newErrors.estimatedValue = "Please enter a valid positive number";
+    }
+
+    if (!formData.submissionStartDate) {
+      newErrors.submissionStartDate = "Submission start date is required";
+    }
+
+    if (!formData.submissionEndDate) {
+      newErrors.submissionEndDate = "Submission end date is required";
+    } else if (formData.submissionStartDate && formData.submissionEndDate) {
+      const startDate = new Date(formData.submissionStartDate);
+      const endDate = new Date(formData.submissionEndDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      if (selectedDate < today) {
-        newErrors.submissionDeadline = "Deadline cannot be in the past";
+      if (endDate < today) {
+        newErrors.submissionEndDate = "End date cannot be in the past";
+      }
+      
+      if (endDate <= startDate) {
+        newErrors.submissionEndDate = "End date must be after start date";
       }
     }
 
-    if (formData.estimatedValue && isNaN(Number(formData.estimatedValue))) {
-      newErrors.estimatedValue = "Please enter a valid number";
+    if (!formData.description.trim()) {
+      newErrors.description = "Description is required";
+    } else if (formData.description.length < 20) {
+      newErrors.description = "Description must be at least 20 characters";
     }
 
     setErrors(newErrors);
@@ -111,22 +136,6 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
       {/* Form Card */}
       <div className="bg-white border border-neutral-200 rounded-lg">
         <div className="p-6 space-y-6">
-          {/* Issuing Organization - Read Only */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
-              Issuing Organization
-            </label>
-            <input
-              type="text"
-              value={formData.issuingOrganization}
-              readOnly
-              className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-lg text-neutral-500 cursor-not-allowed"
-            />
-            <p className="text-xs text-neutral-500 mt-1.5">
-              Your organization details (read-only)
-            </p>
-          </div>
-
           {/* Tender Title */}
           <div>
             <label className="block text-sm font-medium text-neutral-900 mb-2">
@@ -154,81 +163,105 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
             )}
           </div>
 
-          {/* Short Description */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-900 mb-2">
-              Short Description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => handleChange("description", e.target.value)}
-              onBlur={() => handleBlur("description")}
-              placeholder="Brief overview of the tender scope and objectives"
-              rows={4}
-              maxLength={300}
-              className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-colors resize-none ${
-                showError("description")
-                  ? "border-red-300 focus:ring-red-100 focus:border-red-400"
-                  : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
-              }`}
-            />
-            <div className="flex items-center justify-between mt-1.5">
-              {showError("description") ? (
-                <p className="text-xs text-red-600 flex items-center gap-1">
+          {/* Authority Name & Reference ID - Two Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Authority/Department Name */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-900 mb-2">
+                Authority / Department Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.authorityName}
+                onChange={(e) => handleChange("authorityName", e.target.value)}
+                onBlur={() => handleBlur("authorityName")}
+                placeholder="e.g., Public Works Department"
+                className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-colors ${
+                  showError("authorityName")
+                    ? "border-red-300 focus:ring-red-100 focus:border-red-400"
+                    : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
+                }`}
+              />
+              {showError("authorityName") && (
+                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
                   <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  {errors.description}
-                </p>
-              ) : (
-                <p className="text-xs text-neutral-500">
-                  Provide a clear, concise summary
+                  {errors.authorityName}
                 </p>
               )}
-              <p className={`text-xs ${formData.description.length > 300 ? 'text-red-600' : 'text-neutral-500'}`}>
-                {formData.description.length} / 300
-              </p>
+            </div>
+
+            {/* Tender Reference ID */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-900 mb-2">
+                Tender Reference ID <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.referenceId}
+                onChange={(e) => handleChange("referenceId", e.target.value)}
+                onBlur={() => handleBlur("referenceId")}
+                placeholder="Auto-generated (editable)"
+                className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-colors ${
+                  showError("referenceId")
+                    ? "border-red-300 focus:ring-red-100 focus:border-red-400"
+                    : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
+                }`}
+              />
+              {showError("referenceId") ? (
+                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {errors.referenceId}
+                </p>
+              ) : (
+                <p className="text-xs text-neutral-500 mt-1.5">
+                  Auto-generated, editable until publish
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-900 mb-2">
-              Category / Domain <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={formData.category}
-              onChange={(e) => handleChange("category", e.target.value)}
-              onBlur={() => handleBlur("category")}
-              className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 focus:outline-none focus:ring-2 transition-colors ${
-                showError("category")
-                  ? "border-red-300 focus:ring-red-100 focus:border-red-400"
-                  : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
-              }`}
-            >
-              <option value="">Select a category</option>
-              {CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-            {showError("category") && (
-              <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {errors.category}
-              </p>
-            )}
-          </div>
-
-          {/* Two Column Layout for Value and Deadline */}
+          {/* Tender Type & Estimated Value - Two Columns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Tender Type */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-900 mb-2">
+                Tender Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.tenderType}
+                onChange={(e) => handleChange("tenderType", e.target.value)}
+                onBlur={() => handleBlur("tenderType")}
+                className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 focus:outline-none focus:ring-2 transition-colors ${
+                  showError("tenderType")
+                    ? "border-red-300 focus:ring-red-100 focus:border-red-400"
+                    : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
+                }`}
+              >
+                <option value="">Select tender type</option>
+                {TENDER_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              {showError("tenderType") && (
+                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {errors.tenderType}
+                </p>
+              )}
+            </div>
+
             {/* Estimated Value */}
             <div>
               <label className="block text-sm font-medium text-neutral-900 mb-2">
-                Estimated Value (₹)
+                Estimated Value (₹) <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -242,70 +275,107 @@ export default function StepBasicInfo({ data, onUpdate, onValidationChange }) {
                     : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
                 }`}
               />
-              {showError("estimatedValue") ? (
+              {showError("estimatedValue") && (
                 <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
                   <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   {errors.estimatedValue}
                 </p>
-              ) : (
-                <p className="text-xs text-neutral-500 mt-1.5">
-                  Optional - Enter approximate budget
-                </p>
               )}
             </div>
+          </div>
 
-            {/* Submission Deadline */}
+          {/* Submission Start & End Date - Two Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Submission Start Date */}
             <div>
               <label className="block text-sm font-medium text-neutral-900 mb-2">
-                Submission Deadline <span className="text-red-500">*</span>
+                Submission Start Date <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
-                value={formData.submissionDeadline}
-                onChange={(e) => handleChange("submissionDeadline", e.target.value)}
-                onBlur={() => handleBlur("submissionDeadline")}
+                value={formData.submissionStartDate}
+                onChange={(e) => handleChange("submissionStartDate", e.target.value)}
+                onBlur={() => handleBlur("submissionStartDate")}
                 min={new Date().toISOString().split('T')[0]}
                 className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 focus:outline-none focus:ring-2 transition-colors ${
-                  showError("submissionDeadline")
+                  showError("submissionStartDate")
                     ? "border-red-300 focus:ring-red-100 focus:border-red-400"
                     : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
                 }`}
               />
-              {showError("submissionDeadline") && (
+              {showError("submissionStartDate") && (
                 <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
                   <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  {errors.submissionDeadline}
+                  {errors.submissionStartDate}
+                </p>
+              )}
+            </div>
+
+            {/* Submission End Date */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-900 mb-2">
+                Submission End Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={formData.submissionEndDate}
+                onChange={(e) => handleChange("submissionEndDate", e.target.value)}
+                onBlur={() => handleBlur("submissionEndDate")}
+                min={formData.submissionStartDate || new Date().toISOString().split('T')[0]}
+                className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 focus:outline-none focus:ring-2 transition-colors ${
+                  showError("submissionEndDate")
+                    ? "border-red-300 focus:ring-red-100 focus:border-red-400"
+                    : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
+                }`}
+              />
+              {showError("submissionEndDate") && (
+                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {errors.submissionEndDate}
                 </p>
               )}
             </div>
           </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-900 mb-2">
+              Brief Description <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => handleChange("description", e.target.value)}
+              onBlur={() => handleBlur("description")}
+              placeholder="Brief overview of the tender scope and objectives"
+              rows={3}
+              className={`w-full px-4 py-2.5 border rounded-lg text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-colors resize-none ${
+                showError("description")
+                  ? "border-red-300 focus:ring-red-100 focus:border-red-400"
+                  : "border-neutral-300 focus:ring-blue-100 focus:border-blue-500"
+              }`}
+            />
+            {showError("description") ? (
+              <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {errors.description}
+              </p>
+            ) : (
+              <p className="text-xs text-neutral-500 mt-1.5">
+                Provide a clear, concise summary
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Validation Summary */}
-      {Object.keys(errors).length > 0 && Object.keys(touched).length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            <div>
-              <p className="text-sm font-medium text-amber-900">
-                Please fix the following errors:
-              </p>
-              <ul className="mt-2 text-xs text-amber-800 space-y-1">
-                {Object.entries(errors).map(([field, message]) => (
-                  <li key={field}>• {message}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

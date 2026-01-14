@@ -18,6 +18,8 @@ import Login from "./pages/public/Login/Login";
 import Signup from "./pages/public/Signup/Signup";
 import TenderDetail from "./pages/public/Tender/TenderDetail";
 import AdminDashboard from "./pages/admin/Dashboard/Dashboard";
+import TendersList from "./pages/admin/TendersList/TendersList";
+import TenderView from "./pages/admin/TenderView/TenderView";
 import BidderDashboard from "./pages/bidder/Dashboard/Dashboard";
 import BidderProfile from "./pages/bidder/Profile/Profile";
 import BidderProposals from "./pages/bidder/Proposals/Proposals";
@@ -58,10 +60,12 @@ export default function App() {
             <Route path="/tender/:id" element={<TenderDetail />} />
           </Route>
 
-          {/* Admin Routes */}
+          {/* Admin Routes - All protected with authority role */}
           <Route element={<ProtectedRoute allowedRoles={["authority"]} />}>
             <Route path="/admin" element={<AdminLayout />}>
               <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="tenders" element={<TendersList />} />
+              <Route path="tender/view/:tenderId" element={<TenderView />} />
               <Route path="tender/create" element={<TenderCreate />} />
               <Route path="tender/edit/:tenderId" element={<TenderCreate />} />
               <Route path="analytics" element={<Analytics />} />
@@ -71,7 +75,7 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Bidder Routes */}
+          {/* Bidder Routes - All protected with bidder role */}
           <Route element={<ProtectedRoute allowedRoles={["bidder"]} />}>
             <Route path="/bidder" element={<BidderLayout />}>
               <Route path="dashboard" element={<BidderDashboard />} />

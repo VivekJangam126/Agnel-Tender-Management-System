@@ -9,11 +9,12 @@ import {
 } from "lucide-react";
 
 const adminMenu = [
-  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Create Tender", href: "/admin/tender/create", icon: FileText },
-  { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { label: "Bid Evaluation", href: "/admin/bid-evaluation", icon: FileCheck },
-  { label: "Profile / Settings", href: "/admin/profile", icon: Settings },
+  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, rootPath: "/admin/dashboard" },
+  { label: "Tenders", href: "/admin/tenders", icon: FileText, rootPath: "/admin/tenders" },
+  { label: "Create Tender", href: "/admin/tender/create", icon: FileText, rootPath: "/admin/tender" },
+  { label: "Bid Evaluation", href: "/admin/bid-evaluation", icon: FileCheck, rootPath: "/admin/bid-evaluation" },
+  { label: "Analytics", href: "/admin/analytics", icon: BarChart3, rootPath: "/admin/analytics" },
+  { label: "Profile", href: "/admin/profile", icon: Settings, rootPath: "/admin/profile" },
 ];
 
 const bidderMenu = [
@@ -22,6 +23,17 @@ const bidderMenu = [
   { label: "Proposals", href: "/bidder/proposals", icon: FileCheck },
   { label: "Profile", href: "/bidder/profile", icon: Settings },
 ];
+
+/**
+ * Check if a route is active.
+ * For nested routes like /admin/tender/edit/123, check against rootPath (/admin/tender)
+ */
+function isRouteActive(currentPath, menuItem) {
+  if (menuItem.rootPath) {
+    return currentPath.startsWith(menuItem.rootPath);
+  }
+  return currentPath === menuItem.href;
+}
 
 export default function Sidebar({ role = "admin" }) {
   const location = useLocation();
@@ -41,7 +53,7 @@ export default function Sidebar({ role = "admin" }) {
         <ul className="space-y-2">
           {menu.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.href;
+            const isActive = isRouteActive(location.pathname, item);
             return (
               <li key={item.href}>
                 <Link

@@ -16,11 +16,13 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadTenders() {
       setLoading(true);
+      setError(null);
       try {
         const { tenders: data } = await tenderService.listTenders(token);
-        setTenders(data);
+        setTenders(data || []);
       } catch (err) {
         setError(err.message || "Failed to load tenders");
+        setTenders([]);
       } finally {
         setLoading(false);
       }
@@ -28,18 +30,30 @@ export default function Dashboard() {
     if (token) loadTenders();
   }, [token]);
 
-  const drafts = useMemo(() => tenders.filter(t => t.status === 'DRAFT'), [tenders]);
-  const published = useMemo(() => tenders.filter(t => t.status === 'PUBLISHED'), [tenders]);
+  // Compute metrics from real data
+  const metrics = useMemo(() => {
+    const drafts = tenders.filter(t => t.status === 'DRAFT');
+    const published = tenders.filter(t => t.status === 'PUBLISHED');
+    const closed = tenders.filter(t => t.status === 'CLOSED');
+    
+    const now = new Date();
+    const upcomingCount = published.filter(t => {
+      if (!t.submission_deadline) return false;
+      const deadline = new Date(t.submission_deadline);
+      const daysUntil = (deadline - now) / (1000 * 60 * 60 * 24);
+      return daysUntil > 0 && daysUntil <= 7;
+    }).length;
 
-  const upcomingCount = useMemo(() => {
-    const now = Date.now();
-    const within = 1000 * 60 * 60 * 24 * 7;
-    return published.filter(
-      (t) =>
-        new Date(t.submission_deadline).getTime() - now <= within &&
-        new Date(t.submission_deadline).getTime() - now > 0
-    ).length;
-  }, [published]);
+    return {
+      total: tenders.length,
+      drafts: drafts.length,
+      published: published.length,
+      closed: closed.length,
+      upcoming: upcomingCount,
+      draftsData: drafts,
+      publishedData: published,
+    };
+  }, [tenders]);
 
   const handleDeleteDraft = (id) => {
     setTenders((prev) => prev.filter((t) => t.tender_id !== id));
@@ -67,33 +81,49 @@ export default function Dashboard() {
       )}
 
       {/* Overview Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-10">
-        <StatsCard title="Draft Tenders" value={drafts.length} tone="neutral" />
-        <StatsCard
-          title="Published Tenders"
-          value={published.length}
-          tone="positive"
-        />
-        <StatsCard
-          title="Upcoming Deadlines"
-          value={upcomingCount}
-          tone="warning"
-        />
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <StatsCard title="Total Tenders" value={metrics.total} tone="neutral" loading={loading} />
+        <StatsCard title="Draft Tenders" value={metrics.drafts} tone="neutral" loading={loading} />
+        <StatsCard title="Published Tenders" value={metrics.published} tone="positive" loading={loading} />
+        <StatsCard title="Upcoming Deadlines" value={metrics.upcoming} tone="warning" loading={loading} />
       </section>
 
       {/* Drafts */}
       <section className="mb-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-neutral-900">
-            Draft Tenders
+            Draft Tenders ({metrics.drafts})
           </h2>
+          <Link
+            to="/admin/tenders?status=DRAFT"
+            className="text-sm text-primary-600 hover:text-primary-700 transition-colors"
+          >
+            View All
+          </Link>
         </div>
         {loading ? (
-          <div className="text-sm text-neutral-600">Loading...</div>
-        ) : drafts.length === 0 ? (
-          <div className="text-sm text-neutral-600">No draft tenders.</div>
+          <div className="text-sm text-neutral-600">Loading tenders...</div>
+        ) : metrics.drafts === 0 ? (
+          <div className="bg-white border border-neutral-200 rounded-lg p-8 text-center">
+            <p className="text-sm text-neutral-600 mb-4">
+              You don't have any draft tenders yet.
+            </p>
+            <Link
+              to="/admin/tender/create"
+              className="inline-flex items-center px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-semibold shadow hover:bg-primary-700 transition-colors"
+            >
+              Create your first tender
+            </Link>
+          </div>
         ) : (
-          <DraftTenderList drafts={drafts.map(t => ({ id: t.tender_id, title: t.title, updatedAt: t.created_at }))} onDelete={handleDeleteDraft} />
+          <DraftTenderList
+            drafts={metrics.draftsData.map(t => ({
+              id: t.tender_id,
+              title: t.title,
+              updatedAt: t.created_at
+            }))}
+            onDelete={handleDeleteDraft}
+          />
         )}
       </section>
 
@@ -101,15 +131,30 @@ export default function Dashboard() {
       <section className="mb-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-neutral-900">
-            Published Tenders
+            Published Tenders ({metrics.published})
           </h2>
+          <Link
+            to="/admin/tenders?status=PUBLISHED"
+            className="text-sm text-primary-600 hover:text-primary-700 transition-colors"
+          >
+            View All
+          </Link>
         </div>
         {loading ? (
-          <div className="text-sm text-neutral-600">Loading...</div>
-        ) : published.length === 0 ? (
-          <div className="text-sm text-neutral-600">No published tenders.</div>
+          <div className="text-sm text-neutral-600">Loading tenders...</div>
+        ) : metrics.published === 0 ? (
+          <div className="bg-white border border-neutral-200 rounded-lg p-8 text-center text-neutral-700">
+            No tenders have been published yet.
+          </div>
         ) : (
-          <PublishedTenderList tenders={published.map(t => ({ id: t.tender_id, title: t.title, publishedAt: t.created_at, deadline: t.submission_deadline }))} />
+          <PublishedTenderList
+            tenders={metrics.publishedData.map(t => ({
+              id: t.tender_id,
+              title: t.title,
+              publishedAt: t.created_at,
+              deadline: t.submission_deadline
+            }))}
+          />
         )}
       </section>
     </div>
