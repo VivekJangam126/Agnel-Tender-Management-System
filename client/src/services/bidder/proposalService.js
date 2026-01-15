@@ -31,13 +31,24 @@ export const proposalService = {
   },
 
   submitProposal: async (proposalId) => {
-    const response = await api.post(`/bidder/proposals/${proposalId}/submit`);
-    return response;
+    try {
+      const response = await api.post(`/bidder/proposals/${proposalId}/submit`);
+      return response;
+    } catch (error) {
+      // Re-throw with validation details intact
+      if (error.response?.data) {
+        const err = new Error(error.response.data.error || 'Submission failed');
+        err.response = error.response;
+        throw err;
+      }
+      throw error;
+    }
   },
 
   /**
    * Get AI analysis for a proposal section (advisory only)
    * No auto-write, no auto-apply
+   * Backend ALWAYS returns HTTP 200 with fallback on error
    */
   analyzeSectionAsync: async (proposalId, sectionId, data) => {
     const { draftContent, tenderRequirement, sectionType, userQuestion } = data;
@@ -53,20 +64,32 @@ export const proposalService = {
         }
       );
       
+      // Backend always returns { success: true, data: { analysis } }
+      // analysis has structure: { mode: 'ai'|'fallback', suggestions: [...] }
+      const analysis = response.data?.data?.analysis;
+      
+      if (!analysis || !analysis.suggestions) {
+        throw new Error('Invalid response format');
+      }
+      
       return {
         success: true,
-        analysis: response.data?.data?.analysis || {}
+        analysis: analysis
       };
+      
     } catch (error) {
-      // Even on error, return a fallback response
-      console.error('AI analysis failed:', error.message);
+      // Network error or invalid response - provide emergency fallback
+      console.error('[Proposal Service] AI analysis request failed:', error.message);
+      
       return {
         success: false,
         analysis: {
-          observation: 'Unable to fetch AI analysis',
-          suggestedText: 'Review your draft manually',
-          reason: 'AI service temporarily unavailable. Please try again or review manually.',
-          isFallback: true
+          mode: 'fallback',
+          suggestions: [{
+            observation: 'Unable to connect to analysis service',
+            suggestedImprovement: 'Review your draft manually against tender requirements',
+            reason: 'Network error or service unavailable. Please check your connection and try again.'
+          }]
         }
       };
     }

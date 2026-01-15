@@ -192,29 +192,86 @@ export default function ProposalWorkspace() {
   // Handle proposal submission
   const handleSubmitProposal = async () => {
     const mandatorySections = sections.filter(s => s.is_mandatory || s.mandatory);
-    const completedSections = mandatorySections.filter(s => {
+    
+    // Frontend validation (informational - backend is the authoritative validator)
+    const incompleteOnFrontend = mandatorySections.filter(s => {
       const content = sectionContents[s._id || s.id || s.section_id] || '';
-      return content.trim().length >= 50;
+      return content.trim().length < 50;
     });
 
-    if (completedSections.length !== mandatorySections.length) {
-      alert(`Please complete all ${mandatorySections.length} mandatory sections before submitting.`);
+    if (incompleteOnFrontend.length > 0) {
+      alert(
+        `⚠️ Incomplete sections detected:\n\n` +
+        incompleteOnFrontend.map(s => `• ${s.title || s.name}`).join('\n') +
+        `\n\nPlease complete all mandatory sections with at least 50 characters before submitting.`
+      );
       return;
     }
 
-    if (!window.confirm('Are you sure you want to submit this proposal? You cannot edit it after submission.')) {
+    if (!window.confirm(
+      '⚠️ Final Confirmation\n\n' +
+      'You are about to submit this proposal. Once submitted:\n\n' +
+      '• Your proposal will be locked\n' +
+      '• You CANNOT edit it anymore\n' +
+      '• It will be sent for evaluation\n\n' +
+      'Continue?'
+    )) {
       return;
     }
 
     try {
       setSubmitting(true);
       const proposalId = proposal._id || proposal.proposal_id;
-      await proposalService.submitProposal(proposalId);
-      alert('Proposal submitted successfully!');
-      navigate('/bidder/proposal-drafting');
+      
+      const response = await proposalService.submitProposal(proposalId);
+      
+      // Success - update local proposal status
+      setProposal(prev => ({
+        ...prev,
+        status: 'SUBMITTED',
+        submittedAt: new Date().toISOString()
+      }));
+
+      // Show success message
+      alert(
+        '✅ Proposal Submitted Successfully!\n\n' +
+        'Your proposal has been submitted and is now locked for editing.\n' +
+        'You will be redirected to the proposal list.'
+      );
+
+      // Redirect to proposal list
+      setTimeout(() => {
+        navigate('/bidder/proposal-drafting');
+      }, 1500);
+      
     } catch (err) {
       console.error('Failed to submit proposal:', err);
-      alert(err.response?.data?.message || 'Failed to submit proposal');
+      
+      // Handle validation errors from backend
+      const errorData = err.response?.data;
+      
+      if (errorData?.error === 'Proposal incomplete' && errorData?.incompleteSections) {
+        const incompleteDetails = errorData.incompleteSections
+          .map(s => `• ${s.title} (${s.contentLength} / 50 characters)`)
+          .join('\n');
+        
+        alert(
+          `❌ Cannot Submit - Proposal Incomplete\n\n` +
+          `${errorData.details}\n\n${incompleteDetails}\n\n` +
+          `Please complete these sections and try again.`
+        );
+      } else if (errorData?.error === 'Proposal locked' || errorData?.error === 'Proposal already submitted') {
+        alert(
+          `⛔ Proposal Locked\n\n` +
+          `This proposal has already been submitted and cannot be edited or re-submitted.\n\n` +
+          `You will be redirected to the proposal list.`
+        );
+        setTimeout(() => {
+          navigate('/bidder/proposal-drafting');
+        }, 2000);
+      } else {
+        alert(`❌ Submission Failed\n\n${errorData?.details || err.message || 'An error occurred. Please try again.'}`);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -256,10 +313,32 @@ export default function ProposalWorkspace() {
   }
 
   const activeSectionId = activeSection ? (activeSection._id || activeSection.id || activeSection.section_id) : null;
+  const isProposalSubmitted = proposal?.status === 'SUBMITTED';
 
   return (
     <BidderLayout showNavbar={!fullscreenMode}>
       <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
+        {/* Submission Lock Banner */}
+        {isProposalSubmitted && (
+          <div className="flex-shrink-0 bg-amber-50 border-b-2 border-amber-300 px-4 py-3 flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-amber-900 font-semibold text-sm">
+                🔒 Proposal Submitted & Locked
+              </p>
+              <p className="text-amber-700 text-xs mt-1">
+                This proposal has been submitted successfully. It is now locked for editing and cannot be modified.
+                {proposal?.submittedAt && ` Submitted on ${new Date(proposal.submittedAt).toLocaleString()}`}
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/bidder/proposal-drafting')}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition flex-shrink-0"
+            >
+              Back to List
+            </button>
+          </div>
+        )}
+
         {/* Top Controls Bar */}
         <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 flex-shrink-0">
           <button

@@ -492,38 +492,66 @@ If content is adequate, respond with: "No improvements needed for this request."
   /**
    * Analyze a proposal section response against tender requirement
    * Returns advisory guidance (no auto-write, no auto-apply)
+   * ALWAYS returns HTTP 200 with fallback on any error
    */
   async analyzeProposalSection(sectionType, draftContent, tenderRequirement = '', userQuestion = '') {
     try {
-      // If no API key, return structured fallback
+      // If no API key, use fallback immediately
       if (!env.OPENAI_API_KEY) {
+        console.log('[AI Service] No API key - using fallback guidance');
         return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
       }
 
-      const prompt = `You are a tender proposal assistant. Analyze this proposal section response.
+      // Set timeout for AI call (10 seconds max)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('AI request timeout')), 10000);
+      });
+
+      const prompt = `You are a tender proposal assistant. Analyze this bidder's draft response.
 
 Section Type: ${sectionType}
 Tender Requirement: ${tenderRequirement || '(No specific requirement provided)'}
-Draft Content: ${draftContent}
+Bidder's Draft: ${draftContent || '(Empty draft)'}
 User Question: ${userQuestion || 'General analysis'}
 
-Provide ONE piece of advisory guidance in this format:
-- observation: What's missing or could be improved
-- suggestedText: A sample sentence or paragraph (NOT to be auto-applied, just for reference)
-- reason: Why this matters in government/tender context
+Provide 1-3 specific improvement suggestions in this EXACT format:
 
-Focus on: Completeness, clarity, compliance with government standards, risk mitigation.`;
+SUGGESTION 1:
+observation: [What's missing or could be improved]
+suggestedImprovement: [Specific actionable improvement - do NOT write full paragraphs, keep it brief]
+reason: [Why this matters for government tender evaluation]
 
-      const response = await callChatCompletion(prompt);
+SUGGESTION 2:
+...
 
-      // Parse response or provide fallback
-      const suggestion = parseSectionGuidance(response, sectionType) || 
-                        generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
+Focus on: Completeness, clarity, compliance, risk mitigation, alignment with government tender standards.
+If the draft is comprehensive and well-structured, say "No improvements needed."`;
 
-      return suggestion;
+      // Race between AI call and timeout
+      const aiPromise = callChatCompletion(prompt);
+      const response = await Promise.race([aiPromise, timeoutPromise]);
+
+      if (!response || response.trim().length === 0) {
+        console.log('[AI Service] Empty AI response - using fallback');
+        return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
+      }
+
+      // Parse AI response into structured format
+      const parsed = parseAIResponseToSuggestions(response, sectionType);
+      
+      if (!parsed || parsed.suggestions.length === 0) {
+        console.log('[AI Service] Failed to parse AI response - using fallback');
+        return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
+      }
+
+      return {
+        mode: 'ai',
+        suggestions: parsed.suggestions
+      };
+
     } catch (err) {
-      console.error('Section analysis error:', err.message);
-      // Graceful fallback for any error
+      console.error('[AI Service] Error during analysis:', err.message);
+      // Graceful fallback for any error - NEVER throw to frontend
       return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
     }
   },
@@ -590,6 +618,74 @@ export async function analyzeProposalSection(sectionType, draftContent, tenderRe
 }
 
 /**
+ * Parse AI response into structured suggestions
+ * Handles both "SUGGESTION N:" format and plain text
+ */
+function parseAIResponseToSuggestions(response, sectionType) {
+  try {
+    const suggestions = [];
+
+    // Check if AI says no improvements needed
+    if (response.toLowerCase().includes('no improvements needed') || 
+        response.toLowerCase().includes('no improvement needed') ||
+        response.toLowerCase().includes('well-structured and comprehensive')) {
+      return {
+        mode: 'ai',
+        suggestions: [{
+          observation: 'Content review complete',
+          suggestedImprovement: '',
+          reason: 'Your draft appears well-structured and addresses key requirements.'
+        }]
+      };
+    }
+
+    // Try to parse "SUGGESTION N:" blocks
+    const suggestionBlocks = response.split(/SUGGESTION\s+\d+:/i).filter(Boolean);
+
+    suggestionBlocks.forEach(block => {
+      try {
+        // Extract observation
+        const obsMatch = block.match(/observation:\s*(.+?)(?=suggestedImprovement:|reason:|SUGGESTION|$)/is);
+        const observation = obsMatch?.[1]?.trim() || '';
+
+        // Extract suggested improvement
+        const improvementMatch = block.match(/suggestedImprovement:\s*(.+?)(?=reason:|SUGGESTION|$)/is);
+        const suggestedImprovement = improvementMatch?.[1]?.trim() || '';
+
+        // Extract reason
+        const reasonMatch = block.match(/reason:\s*(.+?)(?=SUGGESTION|$)/is);
+        const reason = reasonMatch?.[1]?.trim() || '';
+
+        if (observation && reason) {
+          suggestions.push({
+            observation: observation.substring(0, 200), // Limit length
+            suggestedImprovement: suggestedImprovement.substring(0, 300),
+            reason: reason.substring(0, 200)
+          });
+        }
+      } catch (err) {
+        console.warn('[AI Service] Failed to parse suggestion block:', err.message);
+      }
+    });
+
+    // If parsing succeeded, return suggestions
+    if (suggestions.length > 0) {
+      return {
+        mode: 'ai',
+        suggestions: suggestions.slice(0, 3) // Max 3 suggestions
+      };
+    }
+
+    // If structured parsing failed, return null to trigger fallback
+    return null;
+
+  } catch (err) {
+    console.error('[AI Service] Error parsing AI response:', err.message);
+    return null;
+  }
+}
+
+/**
  * Parse structured section guidance from AI response
  */
 function parseSectionGuidance(response, sectionType) {
@@ -622,52 +718,319 @@ function parseSectionGuidance(response, sectionType) {
 
 /**
  * Generate rule-based fallback guidance when AI is unavailable
+ * Uses deterministic content analysis based on section type
  */
 function generateFallbackSectionGuidance(sectionType, draftContent = '', tenderRequirement = '') {
-  const fallbackGuidance = {
-    ELIGIBILITY: {
-      observation: 'Eligibility criteria should include certifications and experience requirements',
-      suggestedText: 'Ensure your organization has valid registrations and minimum 3+ years of relevant experience.',
-      reason: 'Government tenders require documented proof of bidder capability and compliance history.'
-    },
-    TECHNICAL: {
-      observation: 'Technical response should reference relevant standards and quality assurance processes',
-      suggestedText: 'Specify alignment with ISO/ISI standards and third-party verification mechanisms.',
-      reason: 'Technical compliance ensures project success and reduces execution risk.'
-    },
-    FINANCIAL: {
-      observation: 'Financial proposal should clearly break down costs and payment terms',
-      suggestedText: 'Include itemized costs, EMD details, and milestone-based payment terms.',
-      reason: 'Financial clarity prevents disputes and ensures financial accountability.'
-    },
-    EVALUATION: {
-      observation: 'Evaluation criteria should be transparent and objectively scored',
-      suggestedText: 'Define clear scoring weights: Technical (60%) + Financial (40%)',
-      reason: 'Transparent evaluation ensures fairness and defensibility of tender award.'
-    },
-    TERMS: {
-      observation: 'Terms and conditions should address risk allocation and dispute resolution',
-      suggestedText: 'Include provisions for penalties, warranties, and arbitration clauses.',
-      reason: 'Clear terms protect both parties and enable smooth project execution.'
-    }
-  };
+  const content = (draftContent || '').toLowerCase();
+  const requirement = (tenderRequirement || '').toLowerCase();
+  const contentLength = content.trim().length;
 
-  const guidance = fallbackGuidance[sectionType] || {
-    observation: 'Review your content for completeness and clarity',
-    suggestedText: 'Ensure all required information is included and well-structured.',
-    reason: 'Comprehensive proposals increase chances of approval and successful execution.'
-  };
+  // Build suggestions array based on section-specific analysis
+  const suggestions = [];
 
-  // Check content length
-  const contentLength = (draftContent || '').trim().length;
-  if (contentLength < 50) {
-    guidance.observation = 'Content is too brief. Consider expanding with more detail.';
-    guidance.suggestedText = 'Add specific examples, timelines, or supporting documentation.';
+  switch (sectionType) {
+    case 'ELIGIBILITY':
+      suggestions.push(...analyzeEligibilitySection(content, requirement, contentLength));
+      break;
+    case 'TECHNICAL':
+      suggestions.push(...analyzeTechnicalSection(content, requirement, contentLength));
+      break;
+    case 'FINANCIAL':
+      suggestions.push(...analyzeFinancialSection(content, requirement, contentLength));
+      break;
+    case 'EVALUATION':
+      suggestions.push(...analyzeEvaluationSection(content, requirement, contentLength));
+      break;
+    case 'TERMS':
+      suggestions.push(...analyzeTermsSection(content, requirement, contentLength));
+      break;
+    default:
+      suggestions.push(getGenericGuidance(contentLength));
+  }
+
+  // If no specific issues found, provide positive feedback
+  if (suggestions.length === 0) {
+    suggestions.push({
+      observation: 'Your content appears well-structured',
+      suggestedImprovement: 'Review alignment with tender requirements before submission',
+      reason: 'Regular review ensures completeness and accuracy'
+    });
   }
 
   return {
-    ...guidance,
-    isFallback: true
+    mode: 'fallback',
+    suggestions: suggestions.slice(0, 3) // Limit to 3 suggestions max
+  };
+}
+
+/**
+ * Analyze ELIGIBILITY section content
+ */
+function analyzeEligibilitySection(content, requirement, contentLength) {
+  const suggestions = [];
+
+  // Check for years of experience
+  if (!content.match(/\d+\s*(year|yr)/)) {
+    suggestions.push({
+      observation: 'Missing specific experience duration',
+      suggestedImprovement: 'Explicitly state years of experience (e.g., "minimum 5 years of experience in similar projects")',
+      reason: 'Tender evaluators require clear, quantifiable experience metrics for assessment'
+    });
+  }
+
+  // Check for turnover/financial capacity
+  if (!content.match(/(turnover|revenue|financial|₹|rs\.?|inr)/)) {
+    suggestions.push({
+      observation: 'Financial qualification criteria not mentioned',
+      suggestedImprovement: 'Include average annual turnover or financial capacity with supporting documentation reference',
+      reason: 'Demonstrates financial stability and capacity to execute the project'
+    });
+  }
+
+  // Check for certifications/registrations
+  if (!content.match(/(certificate|certification|registration|license|iso|permit)/)) {
+    suggestions.push({
+      observation: 'Required certifications or registrations not specified',
+      suggestedImprovement: 'List all relevant certifications, licenses, and statutory registrations (e.g., GST, ISO certifications)',
+      reason: 'Regulatory compliance is mandatory for government tenders'
+    });
+  }
+
+  // Check for similar project experience
+  if (!content.match(/(similar|comparable|previous|past|completed|experience)/)) {
+    suggestions.push({
+      observation: 'Similar project experience not highlighted',
+      suggestedImprovement: 'Provide examples of similar projects completed, with project values and completion dates',
+      reason: 'Demonstrates proven capability and reduces perceived execution risk'
+    });
+  }
+
+  // Content length check
+  if (contentLength < 100) {
+    suggestions.push({
+      observation: 'Content is too brief for eligibility criteria',
+      suggestedImprovement: 'Expand with detailed qualification information, backed by specific evidence',
+      reason: 'Comprehensive eligibility responses inspire confidence in evaluators'
+    });
+  }
+
+  return suggestions;
+}
+
+/**
+ * Analyze TECHNICAL section content
+ */
+function analyzeTechnicalSection(content, requirement, contentLength) {
+  const suggestions = [];
+
+  // Check for technical approach/methodology
+  if (!content.match(/(approach|methodology|method|process|procedure|strategy)/)) {
+    suggestions.push({
+      observation: 'Technical approach or methodology not clearly defined',
+      suggestedImprovement: 'Describe your technical approach in structured steps (e.g., Phase 1: Assessment, Phase 2: Implementation)',
+      reason: 'Clear methodology demonstrates planning and reduces execution uncertainty'
+    });
+  }
+
+  // Check for standards/specifications
+  if (!content.match(/(standard|specification|iso|isi|compliance|conform|guideline)/)) {
+    suggestions.push({
+      observation: 'Compliance with technical standards not mentioned',
+      suggestedImprovement: 'Explicitly reference applicable standards (ISO, ISI, BIS) and how your solution complies',
+      reason: 'Standards compliance ensures quality and facilitates acceptance testing'
+    });
+  }
+
+  // Check for tools/technologies/materials
+  if (!content.match(/(tool|technology|material|equipment|resource|system)/)) {
+    suggestions.push({
+      observation: 'Tools, technologies, or materials not specified',
+      suggestedImprovement: 'List key tools, technologies, and materials to be used with technical justification',
+      reason: 'Transparent resource planning enables better evaluation of technical feasibility'
+    });
+  }
+
+  // Check for quality assurance/testing
+  if (!content.match(/(quality|testing|test|qa|qc|inspection|verification|validation)/)) {
+    suggestions.push({
+      observation: 'Quality assurance or testing procedures not addressed',
+      suggestedImprovement: 'Define quality control measures and testing protocols (e.g., "third-party testing at key milestones")',
+      reason: 'Quality assurance processes are critical for government project acceptance'
+    });
+  }
+
+  // Content length check
+  if (contentLength < 150) {
+    suggestions.push({
+      observation: 'Technical content lacks detail',
+      suggestedImprovement: 'Expand with specific technical details, mapped directly to tender specifications',
+      reason: 'Detailed technical responses demonstrate competence and preparation'
+    });
+  }
+
+  return suggestions;
+}
+
+/**
+ * Analyze FINANCIAL section content
+ */
+function analyzeFinancialSection(content, requirement, contentLength) {
+  const suggestions = [];
+
+  // Check for cost structure/pricing
+  if (!content.match(/(cost|price|pricing|rate|amount|₹|rs\.?|inr)/)) {
+    suggestions.push({
+      observation: 'Cost structure or pricing assumptions not detailed',
+      suggestedImprovement: 'Provide itemized cost breakdown with clear assumptions and basis of estimates',
+      reason: 'Transparent pricing enables accurate evaluation and prevents post-award disputes'
+    });
+  }
+
+  // Check for payment milestones
+  if (!content.match(/(payment|milestone|installment|schedule|advance|final)/)) {
+    suggestions.push({
+      observation: 'Payment milestones or schedule not defined',
+      suggestedImprovement: 'Specify payment terms linked to deliverable milestones (e.g., "30% advance, 40% on delivery, 30% after acceptance")',
+      reason: 'Milestone-based payments align with government financial procedures'
+    });
+  }
+
+  // Check for taxes/duties/EMD
+  if (!content.match(/(tax|gst|duty|emd|earnest|deposit|security)/)) {
+    suggestions.push({
+      observation: 'Tax, duties, or EMD references missing',
+      suggestedImprovement: 'Clarify GST applicability, EMD amount, and other financial obligations as per tender terms',
+      reason: 'Financial compliance with tender conditions prevents disqualification'
+    });
+  }
+
+  // Check for financial compliance language
+  if (!content.match(/(comply|accept|agree|acknowledge|confirm)/)) {
+    suggestions.push({
+      observation: 'Acceptance of financial terms not explicitly confirmed',
+      suggestedImprovement: 'Add explicit acceptance statement (e.g., "We accept all payment and financial terms as specified in the tender")',
+      reason: 'Explicit confirmation demonstrates commitment and reduces negotiation risks'
+    });
+  }
+
+  // Content length check
+  if (contentLength < 100) {
+    suggestions.push({
+      observation: 'Financial proposal lacks sufficient detail',
+      suggestedImprovement: 'Expand with comprehensive financial terms, aligned with tender requirements',
+      reason: 'Detailed financial proposals facilitate faster evaluation and approval'
+    });
+  }
+
+  return suggestions;
+}
+
+/**
+ * Analyze EVALUATION section content
+ */
+function analyzeEvaluationSection(content, requirement, contentLength) {
+  const suggestions = [];
+
+  // Check if evaluation criteria addressed
+  if (!content.match(/(criteria|parameter|score|weight|evaluation|assessment)/)) {
+    suggestions.push({
+      observation: 'Evaluation criteria or parameters not explicitly addressed',
+      suggestedImprovement: 'Map your response directly to each evaluation criterion mentioned in the tender',
+      reason: 'Direct alignment with evaluation criteria maximizes scoring potential'
+    });
+  }
+
+  // Check if strengths are highlighted
+  if (!content.match(/(strength|advantage|experience|capability|proven|successful)/)) {
+    suggestions.push({
+      observation: 'Key strengths or differentiators not highlighted',
+      suggestedImprovement: 'Emphasize relevant strengths that align with scoring parameters (e.g., past performance, certifications)',
+      reason: 'Highlighting strengths helps evaluators identify your competitive advantages'
+    });
+  }
+
+  // Check for factual, clear language
+  if (content.match(/(maybe|perhaps|might|possibly|could be)/)) {
+    suggestions.push({
+      observation: 'Content contains tentative or uncertain language',
+      suggestedImprovement: 'Use clear, factual, and confident language supported by evidence',
+      reason: 'Confident, evidence-based responses inspire trust in your capability'
+    });
+  }
+
+  // Content length check
+  if (contentLength < 100) {
+    suggestions.push({
+      observation: 'Evaluation response too brief',
+      suggestedImprovement: 'Expand by addressing each evaluation parameter systematically with supporting facts',
+      reason: 'Comprehensive responses demonstrate thoroughness and attention to detail'
+    });
+  }
+
+  return suggestions;
+}
+
+/**
+ * Analyze TERMS section content
+ */
+function analyzeTermsSection(content, requirement, contentLength) {
+  const suggestions = [];
+
+  // Check for acknowledgment of key terms
+  if (!content.match(/(accept|agree|acknowledge|comply|confirm)/)) {
+    suggestions.push({
+      observation: 'Explicit acceptance of terms not stated',
+      suggestedImprovement: 'Include clear acceptance statement (e.g., "We accept all terms and conditions without deviation")',
+      reason: 'Explicit acceptance prevents ambiguity and potential disqualification'
+    });
+  }
+
+  // Check for confirmation of conditions
+  if (!content.match(/(condition|clause|provision|requirement|obligation)/)) {
+    suggestions.push({
+      observation: 'Key conditions or obligations not referenced',
+      suggestedImprovement: 'Acknowledge critical conditions like delivery timelines, warranties, and performance guarantees',
+      reason: 'Demonstrating understanding of obligations builds evaluator confidence'
+    });
+  }
+
+  // Check for dispute resolution/penalties/timelines
+  if (!content.match(/(dispute|penalty|liquidated damage|timeline|deadline|duration|warranty|guarantee)/)) {
+    suggestions.push({
+      observation: 'Risk-related terms (penalties, disputes, warranties) not addressed',
+      suggestedImprovement: 'Confirm understanding of penalty clauses, dispute resolution mechanisms, and warranty periods',
+      reason: 'Acknowledging risk provisions shows preparedness and professionalism'
+    });
+  }
+
+  // Content length check
+  if (contentLength < 80) {
+    suggestions.push({
+      observation: 'Terms acceptance too brief',
+      suggestedImprovement: 'Provide detailed confirmation of each major term or condition group',
+      reason: 'Thorough acknowledgment reduces post-award conflicts'
+    });
+  }
+
+  return suggestions;
+}
+
+/**
+ * Generic guidance for unknown section types
+ */
+function getGenericGuidance(contentLength) {
+  if (contentLength < 50) {
+    return {
+      observation: 'Content is very brief',
+      suggestedImprovement: 'Expand with specific details, examples, and supporting documentation references',
+      reason: 'Comprehensive responses demonstrate preparation and seriousness'
+    };
+  }
+  
+  return {
+    observation: 'Review for completeness and clarity',
+    suggestedImprovement: 'Ensure all tender requirements are addressed with factual, evidence-based content',
+    reason: 'Complete and clear proposals reduce evaluation friction and improve success rates'
   };
 }
 

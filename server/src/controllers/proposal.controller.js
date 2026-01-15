@@ -52,16 +52,27 @@ export async function upsertSectionResponse(req, res, next) {
   }
 }
 
-// BIDDER: submit draft → SUBMITTED
+// BIDDER: submit draft → SUBMITTED (with full validation)
 export async function submitProposal(req, res, next) {
   try {
     const { id } = req.params;
     const proposal = await ProposalService.submitProposal(id, req.user);
-    res.json(proposal);
+    res.json({ data: { proposal } });
   } catch (err) {
+    // Validation errors return 400 with details
+    if (err.message === 'Proposal incomplete') {
+      return res.status(400).json({
+        error: err.message,
+        details: err.details,
+        incompleteSections: err.incompleteSections || [],
+        incompleteIds: err.incompleteIds || []
+      });
+    }
+    
     if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
     if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
-    if (err.message === 'Only draft proposals can be submitted') return res.status(400).json({ error: err.message });
+    if (err.message === 'Proposal already submitted') return res.status(400).json({ error: err.message, details: err.details });
+    
     next(err);
   }
 }

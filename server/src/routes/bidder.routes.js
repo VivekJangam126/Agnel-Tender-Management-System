@@ -328,7 +328,7 @@ router.get('/proposals/:id', requireAuth, requireRole('BIDDER'), async (req, res
 
 /**
  * PUT /api/bidder/proposals/:id/sections/:sectionId
- * Update proposal section response (draft only)
+ * Update proposal section response (draft only - HARD LOCK after submission)
  * Body: { content }
  */
 router.put('/proposals/:id/sections/:sectionId', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
@@ -340,20 +340,37 @@ router.put('/proposals/:id/sections/:sectionId', requireAuth, requireRole('BIDDE
       return res.status(400).json({ error: 'content is required' });
     }
 
+    // HARD LOCK: Check proposal status BEFORE any update
+    const statusCheck = await pool.query(
+      'SELECT status FROM proposal WHERE proposal_id = $1',
+      [id]
+    );
+    
+    if (statusCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    if (statusCheck.rows[0].status !== 'DRAFT') {
+      return res.status(403).json({
+        error: 'Proposal locked',
+        message: 'Submitted proposals cannot be edited. The proposal is now read-only.'
+      });
+    }
+
     const response = await ProposalService.upsertSectionResponse(id, sectionId, content, req.user);
     res.json(response);
   } catch (err) {
     if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
     if (err.message === 'Section does not belong to this tender') return res.status(400).json({ error: err.message });
     if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
-    if (err.message === 'Cannot edit a non-draft proposal') return res.status(403).json({ error: err.message });
+    if (err.message === 'Cannot edit a non-draft proposal') return res.status(403).json({ error: err.message, message: 'Submitted proposals cannot be edited.' });
     next(err);
   }
 });
 
 /**
  * POST /api/bidder/proposals/:id/submit
- * Submit a draft proposal (DRAFT → SUBMITTED)
+ * Submit a draft proposal (DRAFT → SUBMITTED) with full validation
  */
 router.post('/proposals/:id/submit', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
@@ -365,27 +382,39 @@ router.post('/proposals/:id/submit', requireAuth, requireRole('BIDDER'), async (
       _id: proposalData.proposal_id,
       tenderId: proposalData.tender_id,
       status: proposalData.status,
-      createdAt: proposalData.created_at
+      createdAt: proposalData.created_at,
+      submittedAt: proposalData.submitted_at
     };
     
     res.json({ data: { proposal } });
   } catch (err) {
+    // Validation errors with detailed feedback
+    if (err.message === 'Proposal incomplete') {
+      return res.status(400).json({
+        error: err.message,
+        details: err.details,
+        incompleteSections: err.incompleteSections || [],
+        incompleteIds: err.incompleteIds || []
+      });
+    }
+    
     if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
     if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
-    if (err.message === 'Only draft proposals can be submitted') return res.status(400).json({ error: err.message });
+    if (err.message === 'Proposal already submitted') return res.status(400).json({ error: err.message, details: err.details });
+    
     next(err);
   }
 });
 
 /**
  * POST /api/bidder/proposals/:id/sections/:sectionId/analyze
- * Get AI analysis for a proposal section (advisory only)
- * Body: { draftContent, tenderRequirement, sectionType, userQuestion }
+ * AI-powered analysis of proposal section draft (DRAFT only - HARD LOCK after submission)
+ * ALWAYS returns HTTP 200 - uses fallback if AI fails
  */
 router.post('/proposals/:id/sections/:sectionId/analyze', requireAuth, requireRole('BIDDER'), aiRateLimiter, async (req, res, next) => {
   try {
     const { id: proposalId, sectionId } = req.params;
-    const { draftContent, tenderRequirement, sectionType, userQuestion } = req.body;
+    const { draftContent, tenderRequirement, userQuestion, sectionType } = req.body;
 
     if (!draftContent || !sectionType) {
       return res.status(400).json({ error: 'draftContent and sectionType are required' });
@@ -393,14 +422,23 @@ router.post('/proposals/:id/sections/:sectionId/analyze', requireAuth, requireRo
 
     // Verify proposal ownership
     const proposalCheck = await pool.query(
-      'SELECT organization_id FROM proposal WHERE proposal_id = $1',
+      'SELECT organization_id, status FROM proposal WHERE proposal_id = $1',
       [proposalId]
     );
+    
     if (proposalCheck.rows.length === 0 || proposalCheck.rows[0].organization_id !== req.user.organizationId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // Get AI analysis with fallback
+    // HARD LOCK: Prevent AI analysis on submitted proposals
+    if (proposalCheck.rows[0].status !== 'DRAFT') {
+      return res.status(403).json({
+        error: 'Proposal locked',
+        message: 'Cannot analyze submitted proposals. The proposal is now read-only.'
+      });
+    }
+
+    // Get AI analysis with guaranteed fallback (never throws)
     const analysis = await AIService.analyzeProposalSection(
       sectionType,
       draftContent,
@@ -408,20 +446,31 @@ router.post('/proposals/:id/sections/:sectionId/analyze', requireAuth, requireRo
       userQuestion || ''
     );
 
-    res.json({ data: { analysis } });
+    // ALWAYS return HTTP 200 with structured analysis
+    // analysis.mode will be 'ai' or 'fallback'
+    res.json({ 
+      success: true,
+      data: { analysis } 
+    });
+
   } catch (err) {
-    // Log error but return graceful fallback response
-    console.error('AI analysis error:', err.message);
+    // This should rarely execute since AIService has internal error handling
+    console.error('[Bidder Routes] Unexpected error in analyze endpoint:', err.message);
     
-    // Return rule-based fallback guidance
-    const fallbackGuidance = {
-      observation: 'Unable to fetch live AI analysis',
-      suggestedText: 'Review your draft against the tender requirements and government guidelines',
-      reason: 'Live AI analysis temporarily unavailable. Please review your content manually or try again.',
-      isFallback: true
-    };
-    
-    res.json({ data: { analysis: fallbackGuidance } });
+    // Emergency fallback response
+    res.json({ 
+      success: true,
+      data: { 
+        analysis: {
+          mode: 'fallback',
+          suggestions: [{
+            observation: 'Analysis temporarily unavailable',
+            suggestedImprovement: 'Review your draft against tender requirements manually',
+            reason: 'System is experiencing temporary issues. Please try again or proceed with manual review.'
+          }]
+        }
+      }
+    });
   }
 });
 

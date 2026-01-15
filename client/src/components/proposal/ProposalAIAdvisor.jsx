@@ -39,7 +39,7 @@ export default function ProposalAIAdvisor({
     setAnalyzing(true);
 
     try {
-      // Call AI analysis API
+      // Call AI analysis API (always returns HTTP 200 with fallback on error)
       const result = await proposalService.analyzeSectionAsync(
         proposal._id || proposal.proposal_id,
         section._id || section.id || section.section_id,
@@ -51,40 +51,63 @@ export default function ProposalAIAdvisor({
         }
       );
 
-      // Format AI response
+      // Extract analysis from result
       const analysis = result.analysis;
+      const mode = analysis.mode || 'fallback';
+      const suggestions = analysis.suggestions || [];
+
+      // Format AI response
       let aiResponse = '';
 
-      if (analysis.observation) {
-        aiResponse += `**Observation:** ${analysis.observation}\n\n`;
+      if (mode === 'fallback') {
+        aiResponse += '**ℹ️ Rule-Based Guidance** (AI currently unavailable)\n\n';
       }
 
-      if (analysis.suggestedText) {
-        aiResponse += `**Reference:** "${analysis.suggestedText}"\n\n`;
-      }
+      // Format each suggestion
+      if (suggestions.length > 0) {
+        suggestions.forEach((suggestion, idx) => {
+          if (suggestions.length > 1) {
+            aiResponse += `**Suggestion ${idx + 1}:**\n\n`;
+          }
 
-      if (analysis.reason) {
-        aiResponse += `**Why this matters:** ${analysis.reason}`;
+          if (suggestion.observation) {
+            aiResponse += `**📋 Observation:** ${suggestion.observation}\n\n`;
+          }
+
+          if (suggestion.suggestedImprovement) {
+            aiResponse += `**✨ Improvement:** ${suggestion.suggestedImprovement}\n\n`;
+          }
+
+          if (suggestion.reason) {
+            aiResponse += `**💡 Why:** ${suggestion.reason}\n\n`;
+          }
+
+          if (idx < suggestions.length - 1) {
+            aiResponse += '---\n\n';
+          }
+        });
+      } else {
+        aiResponse = 'No specific improvements identified. Your draft appears well-structured.';
       }
 
       // Add AI message to chat
       const aiMsg = {
         id: Date.now() + 1,
         role: 'ai',
-        content: aiResponse || 'Unable to generate analysis',
-        isFallback: analysis.isFallback || false,
+        content: aiResponse,
+        isFallback: mode === 'fallback',
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, aiMsg]);
     } catch (err) {
-      console.error('AI analysis failed:', err);
+      console.error('[AI Advisor] Analysis failed:', err);
       
-      // Add error message (should not happen due to API fallback)
+      // Add error message (should rarely happen due to API fallback)
       const errorMsg = {
         id: Date.now() + 1,
         role: 'ai',
-        content: 'Unable to fetch analysis. Please try again.',
+        content: '**⚠️ Connection Error**\n\nUnable to connect to analysis service. Please check your network connection and try again.',
         isFallback: true,
         timestamp: new Date()
       };

@@ -137,35 +137,121 @@ export const ProposalService = {
   },
 
   /**
-   * Submit a draft proposal (BIDDER only). Locks further edits.
+   * Validate proposal before submission
+   * Ensures all mandatory sections are completed with minimum content
    */
-  async submitProposal(proposalId, user) {
+  async validateProposalForSubmission(proposalId, user) {
+    // Check proposal exists and belongs to user
     const proposalRes = await pool.query(
-      `SELECT proposal_id, status, organization_id
-       FROM proposal
-       WHERE proposal_id = $1`,
+      `SELECT p.proposal_id, p.status, p.organization_id, p.tender_id
+       FROM proposal p
+       WHERE p.proposal_id = $1`,
       [proposalId]
     );
 
     if (proposalRes.rows.length === 0) {
-      throw new Error('Proposal not found');
+      return {
+        valid: false,
+        error: 'Proposal not found',
+        details: 'The proposal you are trying to submit does not exist.'
+      };
     }
 
     const proposal = proposalRes.rows[0];
 
+    // Check ownership
     if (proposal.organization_id !== user.organizationId) {
-      throw new Error('Forbidden');
+      return {
+        valid: false,
+        error: 'Forbidden',
+        details: 'You do not have permission to submit this proposal.'
+      };
     }
 
+    // Check status is DRAFT
     if (proposal.status !== 'DRAFT') {
-      throw new Error('Only draft proposals can be submitted');
+      return {
+        valid: false,
+        error: 'Proposal already submitted',
+        details: `This proposal has already been ${proposal.status.toLowerCase()}. Only draft proposals can be submitted.`
+      };
     }
 
+    // Get all mandatory sections for the tender
+    const mandatorySectionsRes = await pool.query(
+      `SELECT section_id, title, is_mandatory
+       FROM tender_section
+       WHERE tender_id = $1 AND is_mandatory = true
+       ORDER BY order_index`,
+      [proposal.tender_id]
+    );
+
+    const mandatorySections = mandatorySectionsRes.rows;
+
+    // If no mandatory sections, proposal is valid
+    if (mandatorySections.length === 0) {
+      return { valid: true };
+    }
+
+    // Check each mandatory section has content >= 50 characters
+    const incompleteIds = [];
+    const incompleteSections = [];
+
+    for (const section of mandatorySections) {
+      const responseRes = await pool.query(
+        `SELECT content FROM proposal_section_response
+         WHERE proposal_id = $1 AND section_id = $2`,
+        [proposalId, section.section_id]
+      );
+
+      const content = responseRes.rows[0]?.content || '';
+      const contentLength = content.trim().length;
+
+      if (contentLength < 50) {
+        incompleteIds.push(section.section_id);
+        incompleteSections.push({
+          id: section.section_id,
+          title: section.title,
+          contentLength: contentLength
+        });
+      }
+    }
+
+    if (incompleteSections.length > 0) {
+      return {
+        valid: false,
+        error: 'Proposal incomplete',
+        details: `All mandatory sections must have at least 50 characters. ${incompleteSections.length} section(s) are incomplete:`,
+        incompleteSections: incompleteSections,
+        incompleteIds: incompleteIds
+      };
+    }
+
+    return { valid: true };
+  },
+
+  /**
+   * Submit a draft proposal (BIDDER only). Locks further edits.
+   * MUST validate all mandatory sections are complete before submission
+   */
+  async submitProposal(proposalId, user) {
+    // Run full validation
+    const validation = await this.validateProposalForSubmission(proposalId, user);
+    
+    if (!validation.valid) {
+      const error = new Error(validation.error);
+      error.details = validation.details;
+      error.incompleteSections = validation.incompleteSections;
+      error.incompleteIds = validation.incompleteIds;
+      throw error;
+    }
+
+    // All validation passed - update status to SUBMITTED
     const result = await pool.query(
       `UPDATE proposal
-       SET status = 'SUBMITTED'
+       SET status = 'SUBMITTED', submitted_at = NOW()
        WHERE proposal_id = $1
-       RETURNING proposal_id, tender_id, organization_id, status, created_at`,
+       RETURNING proposal_id, tender_id, organization_id, status, created_at, submitted_at`,
       [proposalId]
     );
 
