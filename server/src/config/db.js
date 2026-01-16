@@ -1,5 +1,9 @@
 import { Pool } from 'pg';
+import dns from 'dns';
 import { env, loadEnv } from './env.js';
+
+// Force IPv4 DNS resolution to avoid ENETUNREACH on IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 loadEnv();
 
@@ -18,8 +22,6 @@ const poolConfig = {
   connectionTimeoutMillis: 10000,
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
-  // Force IPv4 to avoid ENETUNREACH on IPv6
-  family: 4,
 };
 
 export const pool = new Pool(poolConfig);
