@@ -518,19 +518,8 @@ export default function BidderTenderDiscovery() {
             
             <div className="p-6">
               <div className="flex border-b border-slate-200 mb-6">
-                <button
-                  onClick={() => setUploadMethod('url')}
-                  className={`flex-1 py-3 text-center font-medium transition-colors ${
-                    uploadMethod === 'url'
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <Link className="w-4 h-4" />
-                    Enter URL
-                  </div>
-                </button>
+                
+                
                 <button
                   onClick={() => setUploadMethod('file')}
                   className={`flex-1 py-3 text-center font-medium transition-colors ${
