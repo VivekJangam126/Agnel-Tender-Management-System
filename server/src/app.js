@@ -3,6 +3,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import { env, loadEnv } from './config/env.js';
 import { pool } from './config/db.js';
+import { migrateRagEmbeddings } from './db/migrations/009-rag-embeddings.js';
+import { createRagSessionsTable } from './db/migrations/010-rag-sessions.js';
 
 // Load environment variables
 loadEnv();
@@ -19,6 +21,10 @@ async function runMigrations() {
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
     `);
     console.log('[DB] Migration: Added missing columns to tender_section');
+    
+    // Run RAG migrations
+    await migrateRagEmbeddings();
+    await createRagSessionsTable();
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }
@@ -35,6 +41,7 @@ import proposalRoutes from './routes/proposal.routes.js';
 import evaluationRoutes from './routes/evaluation.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import bidderRoutes from './routes/bidder.routes.js';
+import ragRoutes from './routes/rag-new.routes.js';
 
 // Error handler
 import { errorHandler } from './middlewares/error.middleware.js';
@@ -68,6 +75,7 @@ app.use('/api/proposals', proposalRoutes);
 app.use('/api/bidder', bidderRoutes);
 app.use('/api/evaluation', evaluationRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/rag', ragRoutes);
 
 // 404 handler
 app.use((req, res) => {

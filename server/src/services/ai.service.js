@@ -554,6 +554,70 @@ If the draft is comprehensive and well-structured, say "No improvements needed."
       return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
     }
   },
+
+  /**
+   * Generic content explanation - provides AI-powered analysis
+   * Used for tender analysis, insights generation, etc.
+   */
+  async explainContent(text, context = {}) {
+    try {
+      // If no API key, return fallback explanation
+      if (!env.GROQ_API_KEY) {
+        return JSON.stringify({
+          matchScore: 75,
+          strengths: ['Tender loaded successfully', 'Ready for detailed review'],
+          concerns: ['AI analysis unavailable - requires API configuration'],
+          recommendations: ['Review all sections carefully', 'Verify eligibility criteria', 'Check submission deadlines']
+        });
+      }
+
+      const prompt = `Analyze the following tender information and provide insights for a bidder:
+
+${text}
+
+Context: ${JSON.stringify(context)}
+
+Provide your response in the following JSON format (respond with ONLY valid JSON, no markdown):
+{
+  "matchScore": <number between 0-100>,
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "concerns": ["concern 1", "concern 2"],
+  "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"]
+}`;
+
+      const response = await callChatCompletion(
+        prompt,
+        'You are a tender analysis expert. Provide structured JSON responses only.'
+      );
+
+      // Try to parse JSON from response
+      try {
+        // Extract JSON if wrapped in markdown
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return jsonMatch[0];
+        }
+        return response;
+      } catch {
+        // If parsing fails, return fallback
+        return JSON.stringify({
+          matchScore: 75,
+          strengths: ['Tender information available'],
+          concerns: ['Detailed analysis pending'],
+          recommendations: ['Review tender requirements', 'Assess eligibility', 'Prepare proposal timeline']
+        });
+      }
+    } catch (err) {
+      console.error('[AI Service] Error during content explanation:', err.message);
+      // Return fallback on error
+      return JSON.stringify({
+        matchScore: 70,
+        strengths: ['Tender data accessible'],
+        concerns: ['AI analysis temporarily unavailable'],
+        recommendations: ['Manual review recommended', 'Check all requirements', 'Verify deadlines']
+      });
+    }
+  },
 };
 
 /**

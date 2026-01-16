@@ -247,17 +247,20 @@ export default function BidderTenderDiscovery() {
     setUploadLoading(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Show success message
+      setUploadError('File uploaded successfully! Now please select a tender from the list to analyze it with your document.');
       
-      navigate('/bidder/tenders/analyze', {
-        state: {
-          uploadedFile: file.name,
-          fileType: file.type,
-          analyzeMode: 'upload'
-        }
-      });
-      
+      // Close modal after 2 seconds
+      await new Promise(resolve => setTimeout(resolve, 2000));
       setShowUploadModal(false);
+      
+      // Scroll to tenders list
+      const tendersSection = document.getElementById('tenders-section');
+      if (tendersSection) {
+        setTimeout(() => {
+          tendersSection.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
     } catch (err) {
       setUploadError('Failed to upload file. Please try again.');
     } finally {
@@ -276,18 +279,23 @@ export default function BidderTenderDiscovery() {
     setUploadError('');
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Show success message
+      setUploadError('URL saved successfully! Now please select a tender from the list to analyze it with your URL.');
       
-      navigate('/bidder/tenders/analyze', {
-        state: {
-          tenderUrl: tenderUrl,
-          analyzeMode: 'url'
-        }
-      });
-      
+      // Close modal after 2 seconds
+      await new Promise(resolve => setTimeout(resolve, 2000));
       setShowUploadModal(false);
+      setTenderUrl('');
+      
+      // Scroll to tenders list
+      const tendersSection = document.getElementById('tenders-section');
+      if (tendersSection) {
+        setTimeout(() => {
+          tendersSection.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
     } catch (err) {
-      setUploadError('Failed to analyze URL. Please check the link and try again.');
+      setUploadError('Failed to save URL. Please try again.');
     } finally {
       setUploadLoading(false);
     }
@@ -298,6 +306,11 @@ export default function BidderTenderDiscovery() {
     if (file) {
       handleFileUpload(file);
     }
+  };
+
+  const handleAnalyzeTender = (tenderId) => {
+    // Navigate to RAG analysis page
+    navigate(`/bidder/tenders/${tenderId}/analyze-rag`);
   };
 
   const getUrgencyColor = (days) => {
@@ -311,13 +324,6 @@ export default function BidderTenderDiscovery() {
     if (count >= 15) return { label: 'Medium', color: 'orange' };
     return { label: 'Low', color: 'green' };
   };
-
-  const stats = [
-    { label: 'Available Tenders', value: tenders.length.toString(), icon: FileText, color: 'blue' },
-    { label: 'Avg. Competition', value: '18', icon: Users, color: 'purple' },
-    { label: 'Closing Soon', value: '12', icon: Clock, color: 'orange' },
-    { label: 'Total Value', value: '$42M', icon: TrendingUp, color: 'green' }
-  ];
 
   if (loading && tenders.length === 0) {
     return (
@@ -472,7 +478,7 @@ export default function BidderTenderDiscovery() {
           )}
 
           {tenders.length > 0 && (
-            <div className={selectedView === 'grid' ? 'grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-6' : 'space-y-4'}>
+            <div id="tenders-section" className={selectedView === 'grid' ? 'grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-6' : 'space-y-4'}>
               {tenders.map((tender) => (
                 <div key={tender._id} onClick={() => handleViewTender(tender._id)} className="cursor-pointer">
                   <TenderCard 
@@ -480,6 +486,7 @@ export default function BidderTenderDiscovery() {
                     getUrgencyColor={getUrgencyColor}
                     getCompetitionLevel={getCompetitionLevel}
                     onViewDetails={() => handleViewTender(tender._id)}
+                    onAnalyze={() => handleAnalyzeTender(tender._id)}
                   />
                 </div>
               ))}

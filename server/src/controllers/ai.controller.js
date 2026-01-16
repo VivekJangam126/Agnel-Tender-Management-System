@@ -80,3 +80,26 @@ export async function assistTenderDrafting(req, res, next) {
     next(err);
   }
 }
+
+export async function explainContent(req, res, next) {
+  try {
+    const { text, context } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: 'text is required' });
+    }
+
+    try {
+      // Simple fallback explanation for when advanced AI is not available
+      const explanation = await AIService.explainContent(text, context);
+      res.json({ explanation });
+    } catch (err) {
+      if (err.message?.includes('API')) {
+        return res.status(503).json({ error: 'AI service unavailable. Please try again.' });
+      }
+      throw err;
+    }
+  } catch (err) {
+    next(err);
+  }
+}

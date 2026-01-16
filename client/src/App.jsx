@@ -28,6 +28,7 @@ import ProposalPublishedView from "./pages/bidder/ProposalPublishedView";
 import ProposalDrafting from "./pages/bidder/ProposalDrafting";
 import BidderHistory from "./pages/bidder/BidderHistory";
 import AnalyzePage from "./pages/bidder/AnalyzePage";
+import TenderAnalysisRAG from "./pages/bidder/TenderAnalysisRAG";
 import TenderCreate from "./pages/admin/TenderCreate/TenderCreate";
 import Analytics from "./pages/admin/Analytics/Analytics";
 import Profile from "./pages/admin/Profile/Profile";
@@ -84,6 +85,7 @@ export default function App() {
             <Route path="/bidder/tenders" element={<BidderTenderDiscovery />} />
             <Route path="/bidder/analyze" element={<AnalyzePage />} />
             <Route path="/bidder/tenders/:id/analyze" element={<TenderAnalysis />} />
+            <Route path="/bidder/tenders/:id/analyze-rag" element={<TenderAnalysisRAG />} />
             <Route path="/bidder/proposals/:id" element={<ProposalEdit />} />
             <Route path="/bidder/proposal/:tenderId" element={<ProposalWorkspace />} />
             <Route path="/bidder/proposal/published/:proposalId" element={<ProposalPublishedView />} />
