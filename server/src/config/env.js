@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 let loaded = false;
 
-const REQUIRED_DB_VARS = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+const REQUIRED_DB_VARS = ['DATABASE_URL'];
 const REQUIRED_AUTH_VARS = ['JWT_SECRET'];
 const REQUIRED_AI_VARS = ['OPENAI_API_KEY'];
 
@@ -59,11 +59,7 @@ export const env = (() => {
   ensureLoaded();
   return {
     PORT: process.env.PORT || '5000',
-    DB_HOST: process.env.DB_HOST,
-    DB_PORT: process.env.DB_PORT,
-    DB_NAME: process.env.DB_NAME,
-    DB_USER: process.env.DB_USER,
-    DB_PASSWORD: process.env.DB_PASSWORD,
+    DATABASE_URL: process.env.DATABASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     JWT_SECRET: process.env.JWT_SECRET,
     // Optional AI tuning

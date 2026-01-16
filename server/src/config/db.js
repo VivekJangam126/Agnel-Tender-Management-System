@@ -3,15 +3,21 @@ import { env, loadEnv } from './env.js';
 
 loadEnv();
 
+// Parse the DATABASE_URL to extract components
+const url = new URL(env.DATABASE_URL);
+
 const poolConfig = {
-  host: env.DB_HOST,
-  port: Number(env.DB_PORT),
-  database: env.DB_NAME,
-  user: env.DB_USER,
-  password: env.DB_PASSWORD,
+  host: url.hostname,
+  port: parseInt(url.port) || 5432,
+  database: url.pathname.slice(1) || 'postgres',
+  user: url.username,
+  password: decodeURIComponent(url.password),
+  ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 };
 
 export const pool = new Pool(poolConfig);
