@@ -4,7 +4,7 @@ let loaded = false;
 
 const REQUIRED_DB_VARS = ['DATABASE_URL'];
 const REQUIRED_AUTH_VARS = ['JWT_SECRET'];
-const REQUIRED_AI_VARS = ['OPENAI_API_KEY'];
+const REQUIRED_AI_VARS = ['GROQ_API_KEY'];
 
 export function loadEnv() {
   if (loaded) return;
@@ -60,12 +60,11 @@ export const env = (() => {
   return {
     PORT: process.env.PORT || '5000',
     DATABASE_URL: process.env.DATABASE_URL,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    GROQ_API_KEY: process.env.GROQ_API_KEY,
     JWT_SECRET: process.env.JWT_SECRET,
     // Optional AI tuning
-    OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
-    OPENAI_CHAT_MODEL: process.env.OPENAI_CHAT_MODEL || 'gpt-3.5-turbo',
-    OPENAI_CHAT_TEMPERATURE: process.env.OPENAI_CHAT_TEMPERATURE || '0',
+    GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+    AI_TEMPERATURE: process.env.AI_TEMPERATURE || '0',
     // HTTP security & performance
     CORS_ORIGINS: process.env.CORS_ORIGINS || '', // comma-separated list
     CORS_ALLOW_CREDENTIALS: process.env.CORS_ALLOW_CREDENTIALS || 'false',

@@ -3,28 +3,27 @@ import { env } from '../config/env.js';
 import { ChunkingService } from './chunking.service.js';
 import { EmbeddingService } from './embedding.service.js';
 
-const CHAT_MODEL = 'gpt-3.5-turbo';
+const CHAT_MODEL = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const MAX_CONTEXT_CHUNKS = 5;
 
-async function callChatCompletion(prompt) {
-  if (!env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured');
+async function callChatCompletion(prompt, systemPrompt = 'You are a tender assistant. Use ONLY the provided context. If the answer is not in the context, say you do not know.') {
+  if (!env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not configured');
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
       model: CHAT_MODEL,
-      temperature: 0,
+      temperature: parseFloat(env.AI_TEMPERATURE || '0'),
       messages: [
         {
           role: 'system',
-          content:
-            'You are a tender assistant. Use ONLY the provided context. If the answer is not in the context, say you do not know.',
+          content: systemPrompt,
         },
         {
           role: 'user',
@@ -497,7 +496,7 @@ If content is adequate, respond with: "No improvements needed for this request."
   async analyzeProposalSection(sectionType, draftContent, tenderRequirement = '', userQuestion = '') {
     try {
       // If no API key, use fallback immediately
-      if (!env.OPENAI_API_KEY) {
+      if (!env.GROQ_API_KEY) {
         console.log('[AI Service] No API key - using fallback guidance');
         return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
       }

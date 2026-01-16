@@ -12,13 +12,24 @@ export default function Dashboard() {
   const [tenders, setTenders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    // Check if we need to force refresh (from publish redirect)
+    const needsRefresh = sessionStorage.getItem('tendersNeedRefresh');
+    if (needsRefresh) {
+      sessionStorage.removeItem('tendersNeedRefresh');
+      setRefreshKey(prev => prev + 1);
+    }
+  }, []);
 
   useEffect(() => {
     async function loadTenders() {
       setLoading(true);
       setError(null);
       try {
-        const { tenders: data } = await tenderService.listTenders(token);
+        // Add timestamp to bust cache
+        const { tenders: data } = await tenderService.listTenders(token, { _t: Date.now() });
         setTenders(data || []);
       } catch (err) {
         setError(err.message || "Failed to load tenders");
@@ -28,7 +39,27 @@ export default function Dashboard() {
       }
     }
     if (token) loadTenders();
-  }, [token]);
+    
+    // Set up periodic refresh every 15 seconds (faster than before)
+    const interval = setInterval(() => {
+      if (token && !loading) {
+        loadTenders();
+      }
+    }, 15000);
+    
+    // Refresh when window gains focus (user returns to tab)
+    const handleFocus = () => {
+      if (token && !loading) {
+        loadTenders();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [token, refreshKey]);
 
   // Compute metrics from real data
   const metrics = useMemo(() => {
@@ -59,18 +90,32 @@ export default function Dashboard() {
     setTenders((prev) => prev.filter((t) => t.tender_id !== id));
   };
 
+  const handleManualRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
   return (
     <div className="px-6 py-6 mx-auto max-w-7xl">
       <PageHeader
         title="Dashboard"
         description="Manage and publish your tenders from a single place."
         actions={
-          <Link
-            to="/admin/tender/create"
-            className="inline-flex items-center px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-semibold shadow hover:bg-primary-700 transition-colors"
-          >
-            Create New Tender
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleManualRefresh}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-2 rounded-md bg-neutral-200 text-neutral-700 text-sm font-medium hover:bg-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Refresh tender list"
+            >
+              ⟳ Refresh
+            </button>
+            <Link
+              to="/admin/tender/create"
+              className="inline-flex items-center px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-semibold shadow hover:bg-primary-700 transition-colors"
+            >
+              Create New Tender
+            </Link>
+          </div>
         }
       />
 

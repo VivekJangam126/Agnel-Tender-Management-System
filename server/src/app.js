@@ -2,9 +2,30 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env, loadEnv } from './config/env.js';
+import { pool } from './config/db.js';
 
 // Load environment variables
 loadEnv();
+
+// Run migrations on startup
+async function runMigrations() {
+  try {
+    // Add missing columns to tender_section if they don't exist
+    await pool.query(`
+      ALTER TABLE tender_section
+      ADD COLUMN IF NOT EXISTS content TEXT,
+      ADD COLUMN IF NOT EXISTS section_key VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS description TEXT,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+    `);
+    console.log('[DB] Migration: Added missing columns to tender_section');
+  } catch (err) {
+    console.error('[DB] Migration error:', err.message);
+  }
+}
+
+// Run migrations
+runMigrations();
 
 // Routes
 import authRoutes from './routes/auth.routes.js';

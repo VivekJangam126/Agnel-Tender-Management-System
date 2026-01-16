@@ -19,7 +19,8 @@ export default function TendersList() {
       setLoading(true);
       setError(null);
       try {
-        const { tenders: data } = await tenderService.listTenders(token);
+        // Add timestamp to prevent caching
+        const { tenders: data } = await tenderService.listTenders(token, { _t: Date.now() });
         setTenders(data || []);
       } catch (err) {
         setError(err.message || "Failed to load tenders");
@@ -29,7 +30,7 @@ export default function TendersList() {
       }
     }
     if (token) loadTenders();
-  }, [token]);
+  }, [token, searchParams]); // Re-fetch when search params change
 
   // Filter tenders based on search and status
   const filteredTenders = useMemo(() => {

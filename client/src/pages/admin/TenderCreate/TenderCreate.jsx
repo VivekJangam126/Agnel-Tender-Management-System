@@ -178,8 +178,12 @@ export default function TenderCreate() {
       
       setPublished(true);
       
-      // Redirect to dashboard after success
-      setTimeout(() => navigate('/admin/dashboard'), 1500);
+      // Wait a bit for database to sync, then redirect with refresh signal
+      setTimeout(() => {
+        // Use sessionStorage to signal dashboard to force refresh
+        sessionStorage.setItem('tendersNeedRefresh', 'true');
+        navigate('/admin/dashboard?refresh=true');
+      }, 2000);
     } catch (err) {
       setError(err.message || "Failed to publish tender");
     } finally {
