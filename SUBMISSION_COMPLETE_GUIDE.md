@@ -408,7 +408,7 @@ npm run dev
 
 ### Issue: Can still edit after submit
 **Solution:**
-1. Backend didn't check status
+1. Backend didn't check status  
 2. Verify migration ran: `\d proposal` 
 3. Restart backend: `npm run dev`
 

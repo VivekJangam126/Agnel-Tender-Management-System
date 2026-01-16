@@ -2,7 +2,7 @@
  * Proposal Publish Service
  *
  * Client-side service for proposal publishing workflow.
- * Currently provides stub methods - ready to connect to backend when available.
+ * Connected to backend API endpoints.
  *
  * @module proposalPublishService
  */
@@ -26,7 +26,7 @@ export const PROPOSAL_STATUS = {
  * Status transition rules
  */
 export const STATUS_TRANSITIONS = {
-  DRAFT: ['FINAL'],
+  DRAFT: ['FINAL', 'SUBMITTED'],
   FINAL: ['DRAFT', 'PUBLISHED'],
   PUBLISHED: [], // Cannot transition from PUBLISHED
   SUBMITTED: [], // Cannot transition from SUBMITTED
@@ -44,29 +44,14 @@ export const proposalPublishService = {
    */
   finalizeProposal: async (proposalId) => {
     try {
-      // TODO: Connect to backend when available
-      // const response = await api.post(`/proposals/${proposalId}/finalize`);
-      // return response.data;
-
-      // STUB: Simulate API call
-      console.log(`[Publish Service] Finalizing proposal ${proposalId}`);
-
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
-
-      return {
-        success: true,
-        data: {
-          proposal: {
-            id: proposalId,
-            status: PROPOSAL_STATUS.FINAL,
-            finalizedAt: new Date().toISOString()
-          }
-        },
-        message: 'Proposal finalized successfully'
-      };
+      const response = await api.post(`/bidder/proposals/${proposalId}/finalize`);
+      return response.data;
     } catch (error) {
       console.error('[Publish Service] Finalize failed:', error);
-      throw new Error(error.response?.data?.message || 'Failed to finalize proposal');
+      const errorData = error.response?.data || {};
+      const err = new Error(errorData.error || errorData.message || 'Failed to finalize proposal');
+      err.incompleteSections = errorData.incompleteSections;
+      throw err;
     }
   },
 
@@ -78,29 +63,11 @@ export const proposalPublishService = {
    */
   publishProposal: async (proposalId) => {
     try {
-      // TODO: Connect to backend when available
-      // const response = await api.post(`/proposals/${proposalId}/publish`);
-      // return response.data;
-
-      // STUB: Simulate API call
-      console.log(`[Publish Service] Publishing proposal ${proposalId}`);
-
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate delay
-
-      return {
-        success: true,
-        data: {
-          proposal: {
-            id: proposalId,
-            status: PROPOSAL_STATUS.PUBLISHED,
-            publishedAt: new Date().toISOString()
-          }
-        },
-        message: 'Proposal published successfully'
-      };
+      const response = await api.post(`/bidder/proposals/${proposalId}/publish`);
+      return response.data;
     } catch (error) {
       console.error('[Publish Service] Publish failed:', error);
-      throw new Error(error.response?.data?.message || 'Failed to publish proposal');
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to publish proposal');
     }
   },
 
@@ -112,28 +79,11 @@ export const proposalPublishService = {
    */
   revertToDraft: async (proposalId) => {
     try {
-      // TODO: Connect to backend when available
-      // const response = await api.post(`/proposals/${proposalId}/revert`);
-      // return response.data;
-
-      // STUB: Simulate API call
-      console.log(`[Publish Service] Reverting proposal ${proposalId} to draft`);
-
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      return {
-        success: true,
-        data: {
-          proposal: {
-            id: proposalId,
-            status: PROPOSAL_STATUS.DRAFT
-          }
-        },
-        message: 'Proposal reverted to draft'
-      };
+      const response = await api.post(`/bidder/proposals/${proposalId}/revert`);
+      return response.data;
     } catch (error) {
       console.error('[Publish Service] Revert failed:', error);
-      throw new Error(error.response?.data?.message || 'Failed to revert proposal');
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to revert proposal');
     }
   },
 
@@ -145,31 +95,11 @@ export const proposalPublishService = {
    */
   createNewVersion: async (proposalId) => {
     try {
-      // TODO: Connect to backend when available
-      // const response = await api.post(`/proposals/${proposalId}/new-version`);
-      // return response.data;
-
-      // STUB: Simulate API call
-      console.log(`[Publish Service] Creating new version of proposal ${proposalId}`);
-
-      await new Promise(resolve => setTimeout(resolve, 1200));
-
-      return {
-        success: true,
-        data: {
-          proposal: {
-            id: `${proposalId}_v2`, // New ID for new version
-            parentProposalId: proposalId,
-            version: 2,
-            status: PROPOSAL_STATUS.DRAFT,
-            createdAt: new Date().toISOString()
-          }
-        },
-        message: 'New version created successfully'
-      };
+      const response = await api.post(`/bidder/proposals/${proposalId}/new-version`);
+      return response.data;
     } catch (error) {
       console.error('[Publish Service] Create version failed:', error);
-      throw new Error(error.response?.data?.message || 'Failed to create new version');
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to create new version');
     }
   },
 
@@ -177,34 +107,32 @@ export const proposalPublishService = {
    * Get version history for a proposal
    *
    * @param {string} proposalId - The proposal ID
-   * @returns {Promise<Array>} - Array of version objects
+   * @returns {Promise<Object>} - Version history data
    */
   getVersionHistory: async (proposalId) => {
     try {
-      // TODO: Connect to backend when available
-      // const response = await api.get(`/proposals/${proposalId}/versions`);
-      // return response.data;
-
-      // STUB: Return mock version history
-      console.log(`[Publish Service] Getting version history for proposal ${proposalId}`);
-
-      return {
-        success: true,
-        data: {
-          versions: [
-            {
-              version: 1,
-              status: PROPOSAL_STATUS.DRAFT,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              isCurrent: true
-            }
-          ]
-        }
-      };
+      const response = await api.get(`/bidder/proposals/${proposalId}/versions`);
+      return response.data;
     } catch (error) {
       console.error('[Publish Service] Get versions failed:', error);
-      throw new Error('Failed to get version history');
+      throw new Error(error.response?.data?.error || 'Failed to get version history');
+    }
+  },
+
+  /**
+   * Get a specific version snapshot
+   *
+   * @param {string} proposalId - The proposal ID
+   * @param {number} versionNumber - The version number to retrieve
+   * @returns {Promise<Object>} - Version snapshot data
+   */
+  getVersionSnapshot: async (proposalId, versionNumber) => {
+    try {
+      const response = await api.get(`/bidder/proposals/${proposalId}/versions/${versionNumber}`);
+      return response.data;
+    } catch (error) {
+      console.error('[Publish Service] Get version snapshot failed:', error);
+      throw new Error(error.response?.data?.error || 'Failed to get version snapshot');
     }
   },
 

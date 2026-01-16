@@ -1,12 +1,12 @@
 import { Pool } from 'pg';
+import dns from 'dns';
 import { env, loadEnv } from './env.js';
+
+// Force IPv4 DNS resolution to avoid ENETUNREACH on IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 loadEnv();
 
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
 // Parse the DATABASE_URL to extract components
 const url = new URL(env.DATABASE_URL);
 

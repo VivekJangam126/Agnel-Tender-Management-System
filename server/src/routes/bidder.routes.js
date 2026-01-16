@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { TenderService } from '../services/tender.service.js';
 import { ProposalService } from '../services/proposal.service.js';
+import { ProposalExportService } from '../services/proposal-export.service.js';
+import { ProposalPublishService } from '../services/proposal-publish.service.js';
 import { AIService } from '../services/ai.service.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -471,6 +473,249 @@ router.post('/proposals/:id/sections/:sectionId/analyze', requireAuth, requireRo
         }
       }
     });
+  }
+});
+
+// ==========================================
+// PROPOSAL EXPORT ENDPOINTS
+// ==========================================
+
+/**
+ * GET /api/bidder/proposals/:id/export
+ * Export proposal as PDF or DOCX
+ * Query params: format (pdf|docx), template (formal|modern|minimal)
+ */
+router.get('/proposals/:id/export', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { format = 'pdf', template = 'formal' } = req.query;
+
+    // Validate format
+    if (!['pdf', 'docx'].includes(format)) {
+      return res.status(400).json({ error: 'Invalid format. Use pdf or docx.' });
+    }
+
+    // Validate template
+    if (!['formal', 'modern', 'minimal'].includes(template)) {
+      return res.status(400).json({ error: 'Invalid template. Use formal, modern, or minimal.' });
+    }
+
+    let buffer;
+    let contentType;
+    let filename;
+
+    if (format === 'pdf') {
+      buffer = await ProposalExportService.generatePDF(id, template, req.user);
+      contentType = 'application/pdf';
+      filename = `proposal_${id}_${template}.pdf`;
+    } else {
+      buffer = await ProposalExportService.generateDOCX(id, template, req.user);
+      contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      filename = `proposal_${id}_${template}.docx`;
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/proposals/:id/export/preview
+ * Get export preview data
+ * Query params: template (formal|modern|minimal)
+ */
+router.get('/proposals/:id/export/preview', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { template = 'formal' } = req.query;
+
+    const preview = await ProposalExportService.getExportPreview(id, template, req.user);
+    res.json({ success: true, data: preview });
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    next(err);
+  }
+});
+
+// ==========================================
+// PROPOSAL PUBLISH WORKFLOW ENDPOINTS
+// ==========================================
+
+/**
+ * POST /api/bidder/proposals/:id/finalize
+ * Finalize a proposal (DRAFT -> FINAL)
+ */
+router.post('/proposals/:id/finalize', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const proposal = await ProposalPublishService.finalizeProposal(id, req.user);
+
+    res.json({
+      success: true,
+      data: {
+        proposal: {
+          _id: proposal.proposal_id,
+          tenderId: proposal.tender_id,
+          status: proposal.status,
+          version: proposal.version,
+          finalizedAt: proposal.finalized_at
+        }
+      },
+      message: 'Proposal finalized successfully'
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    if (err.message.includes('Cannot finalize')) return res.status(400).json({ error: err.message });
+    if (err.message.includes('incomplete mandatory')) {
+      return res.status(400).json({
+        error: err.message,
+        incompleteSections: err.incompleteSections || []
+      });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/proposals/:id/publish
+ * Publish a proposal (FINAL -> PUBLISHED)
+ */
+router.post('/proposals/:id/publish', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const proposal = await ProposalPublishService.publishProposal(id, req.user);
+
+    res.json({
+      success: true,
+      data: {
+        proposal: {
+          _id: proposal.proposal_id,
+          tenderId: proposal.tender_id,
+          status: proposal.status,
+          version: proposal.version,
+          publishedAt: proposal.published_at
+        }
+      },
+      message: 'Proposal published successfully'
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    if (err.message.includes('Cannot publish')) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/proposals/:id/revert
+ * Revert a finalized proposal back to draft (FINAL -> DRAFT)
+ */
+router.post('/proposals/:id/revert', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const proposal = await ProposalPublishService.revertToDraft(id, req.user);
+
+    res.json({
+      success: true,
+      data: {
+        proposal: {
+          _id: proposal.proposal_id,
+          tenderId: proposal.tender_id,
+          status: proposal.status,
+          version: proposal.version
+        }
+      },
+      message: 'Proposal reverted to draft'
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    if (err.message.includes('Cannot revert')) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+// ==========================================
+// PROPOSAL VERSIONING ENDPOINTS
+// ==========================================
+
+/**
+ * POST /api/bidder/proposals/:id/new-version
+ * Create a new version of a published proposal
+ */
+router.post('/proposals/:id/new-version', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const newProposal = await ProposalPublishService.createNewVersion(id, req.user);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        proposal: {
+          _id: newProposal.proposal_id,
+          tenderId: newProposal.tender_id,
+          parentProposalId: newProposal.parent_proposal_id,
+          version: newProposal.version,
+          status: newProposal.status,
+          createdAt: newProposal.created_at
+        }
+      },
+      message: 'New version created successfully'
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    if (err.message.includes('Cannot create new version')) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/proposals/:id/versions
+ * Get version history for a proposal
+ */
+router.get('/proposals/:id/versions', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const history = await ProposalPublishService.getVersionHistory(id, req.user);
+
+    res.json({
+      success: true,
+      data: history
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/proposals/:id/versions/:versionNumber
+ * Get a specific version snapshot
+ */
+router.get('/proposals/:id/versions/:versionNumber', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id, versionNumber } = req.params;
+    const snapshot = await ProposalPublishService.getVersionSnapshot(id, parseInt(versionNumber), req.user);
+
+    res.json({
+      success: true,
+      data: snapshot
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Version not found') return res.status(404).json({ error: err.message });
+    if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    next(err);
   }
 });
 
