@@ -62,7 +62,7 @@ export default function ActiveProposals() {
           </p>
           <div className="flex gap-3 justify-center">
             <Link
-              to="/bidder/saved"
+              to="/bidder/tenders"
               className="text-primary-600 hover:underline text-sm"
             >
               View saved tenders
@@ -94,7 +94,7 @@ export default function ActiveProposals() {
                   </div>
                 </div>
                 <Link
-                  to={`/bidder/proposals/${draft.proposal_id}`}
+                  to={`/bidder/proposal/${draft.tender_id}`}
                   className="px-4 py-2 rounded-md bg-primary-600 text-white text-sm hover:bg-primary-700 whitespace-nowrap"
                 >
                   Continue Drafting

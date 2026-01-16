@@ -76,15 +76,15 @@ export default function TenderCard({ tender, getUrgencyColor, getCompetitionLeve
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-        <button 
-          onClick={onViewDetails}
+        <button
+          onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
           className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2 group-hover:shadow-md transition-all"
         >
           <Eye className="w-4 h-4" />
           View Details
         </button>
-        <button 
-          onClick={onViewDetails}
+        <button
+          onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
           className="sm:flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-semibold flex items-center justify-center gap-2"
         >
           Analyze

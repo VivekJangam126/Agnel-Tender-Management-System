@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
+import BidderLayout from '../../components/bidder-layout/BidderLayout';
 import TenderHeader from '../../components/tender-analysis/TenderHeader';
 import TabNavigation from '../../components/tender-analysis/TabNavigation';
 import OverviewTab from '../../components/tender-analysis/OverviewTab';
@@ -73,26 +74,43 @@ function TenderAnalysis() {
 
       console.log('Tender data:', tenderData);
       console.log('Sections data:', sectionsData);
-      
+
+      // Use real statistics from backend
+      const stats = tenderData.statistics || {};
+
       setTender({
         title: tenderData.title,
         organization: tenderData.organizationId?.organizationName || 'Organization',
         publishedAt: tenderData.createdAt,
         closedAt: tenderData.deadline,
-        daysRemaining: tenderData.deadline 
+        daysRemaining: tenderData.deadline
           ? Math.max(0, Math.ceil((new Date(tenderData.deadline) - new Date()) / (1000 * 60 * 60 * 24)))
           : 0,
-        estimatedValue: tenderData.value ? `$${(tenderData.value / 1000000).toFixed(1)}M` : 'N/A',
-        proposalCount: Math.floor(Math.random() * 25) + 5, // Mock data for now
-        description: tenderData.description
+        estimatedValue: tenderData.value
+          ? (tenderData.value >= 10000000 ? `₹${(tenderData.value / 10000000).toFixed(1)}Cr` :
+             tenderData.value >= 100000 ? `₹${(tenderData.value / 100000).toFixed(1)}L` :
+             `₹${tenderData.value.toLocaleString()}`)
+          : 'N/A',
+        proposalCount: stats.proposalCount || 0, // Real proposal count from DB
+        description: tenderData.description,
+        // Additional statistics for display
+        statistics: {
+          wordCount: stats.wordCount || 0,
+          sectionCount: stats.sectionCount || 0,
+          estimatedReadTime: stats.estimatedReadTime || 0,
+          mandatorySections: stats.mandatorySections || 0
+        }
       });
 
-      // Transform sections
+      // Transform sections with real complexity scores from backend
       const transformedSections = (sectionsData || []).map(section => ({
         name: section.title || section.sectionTitle || section.sectionName,
         content: section.content || section.description || 'No content available',
         keyPoints: section.keyPoints || [],
-        complexity: section.complexity || 'Medium'
+        complexity: section.complexity || 'Medium',
+        complexityScore: section.complexityScore || 0,
+        wordCount: section.wordCount || 0,
+        isMandatory: section.isMandatory || false
       }));
       
       setSections(transformedSections);
@@ -165,26 +183,13 @@ function TenderAnalysis() {
     setAiLoading(true);
 
     try {
-      // Call AI API with dynamic tender context
-      const response = await aiService.proposalHelp({
-        question,
-        context: {
-          tenderId: id,
-          tenderTitle: tender?.title,
-          tenderDescription: tender?.description,
-          sections: sections.map(s => ({
-            name: s.name,
-            content: s.content.substring(0, 500),
-            keyPoints: s.keyPoints
-          })),
-          aiInsights
-        }
-      });
+      // Use RAG-based tender chat with vector similarity search
+      const response = await aiService.tenderChat(id, question);
 
       let aiResponse = 'Could not process your question at this time.';
-      
-      if (response.data && response.data.response) {
-        aiResponse = response.data.response;
+
+      if (response.data && response.data.answer) {
+        aiResponse = response.data.answer;
       }
 
       setChatMessages(prev => [...prev, {
@@ -194,10 +199,10 @@ function TenderAnalysis() {
       }]);
     } catch (err) {
       console.error('Error getting AI response:', err);
-      
+
       // Fallback response based on question keywords
       let fallbackResponse = generateFallbackResponse(question);
-      
+
       setChatMessages(prev => [...prev, {
         role: 'assistant',
         content: fallbackResponse,
@@ -252,8 +257,8 @@ function TenderAnalysis() {
     try {
       const response = await proposalService.createProposal(id);
       if (response.data && response.data.proposal) {
-        const proposalId = response.data.proposal._id;
-        navigate(`/bidder/proposals/${proposalId}`);
+        // Navigate to ProposalWorkspace with tenderId
+        navigate(`/bidder/proposal/${id}`);
       }
     } catch (err) {
       console.error('Error creating proposal:', err);
@@ -264,80 +269,86 @@ function TenderAnalysis() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="animate-spin w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading tender details...</p>
+      <BidderLayout>
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="text-center">
+            <div className="animate-spin w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"></div>
+            <p className="text-slate-600">Loading tender details...</p>
+          </div>
         </div>
-      </div>
+      </BidderLayout>
     );
   }
 
   // Error state
   if (error || !tender) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="max-w-md w-full mx-4 p-6 bg-white rounded-lg border border-red-200">
-          <div className="flex gap-3 items-start">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h2 className="font-semibold text-red-900 mb-2">Error Loading Tender</h2>
-              <p className="text-red-700 text-sm mb-4">{error || 'Tender not found'}</p>
-              <button
-                onClick={() => navigate('/bidder/tenders')}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
-              >
-                Back to Discovery
-              </button>
+      <BidderLayout>
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="max-w-md w-full mx-4 p-6 bg-white rounded-lg border border-red-200">
+            <div className="flex gap-3 items-start">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h2 className="font-semibold text-red-900 mb-2">Error Loading Tender</h2>
+                <p className="text-red-700 text-sm mb-4">{error || 'Tender not found'}</p>
+                <button
+                  onClick={() => navigate('/bidder/tenders')}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
+                >
+                  Back to Discovery
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </BidderLayout>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <TenderHeader tender={tender} onStartProposal={handleStartProposal} />
+    <BidderLayout>
+      <div className="min-h-screen flex flex-col bg-slate-50">
+        <TenderHeader tender={tender} onStartProposal={handleStartProposal} />
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-        {/* Left: Document View */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0">
-          <div className="max-w-4xl mx-auto">
-            <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+          {/* Left: Document View */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0">
+            <div className="max-w-4xl mx-auto">
+              <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
 
-            {activeTab === 'overview' && (
-              <OverviewTab tender={tender} sections={sections} />
-            )}
+              {activeTab === 'overview' && (
+                <OverviewTab tender={tender} sections={sections} />
+              )}
 
-            {activeTab === 'sections' && (
-              <SectionsTab 
-                sections={sections}
-                expandedSections={expandedSections}
-                toggleSection={toggleSection}
-              />
-            )}
+              {activeTab === 'sections' && (
+                <SectionsTab
+                  sections={sections}
+                  expandedSections={expandedSections}
+                  toggleSection={toggleSection}
+                />
+              )}
 
-            {activeTab === 'insights' && (
-              <InsightsTab aiInsights={aiInsights} />
-            )}
+              {activeTab === 'insights' && (
+                <InsightsTab aiInsights={aiInsights} />
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Right: AI Assistant */}
-        <AIAssistant
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          handleSearch={handleSearch}
-          quickQuestions={quickQuestions}
-          handleAIQuestion={handleAIQuestion}
-          chatMessages={chatMessages}
-          aiLoading={aiLoading}
-          userInput={userInput}
-          setUserInput={setUserInput}
-        />
+          {/* Right: AI Assistant */}
+          <AIAssistant
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            handleSearch={handleSearch}
+            quickQuestions={quickQuestions}
+            handleAIQuestion={handleAIQuestion}
+            chatMessages={chatMessages}
+            aiLoading={aiLoading}
+            userInput={userInput}
+            setUserInput={setUserInput}
+          />
+        </div>
       </div>
-    </div>
+    </BidderLayout>
   );
 }
 

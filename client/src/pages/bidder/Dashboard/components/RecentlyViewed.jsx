@@ -20,7 +20,7 @@ export default function RecentlyViewed() {
         {recent.map((tender) => (
           <Link
             key={tender.id}
-            to={`/tender/${tender.id}`}
+            to={`/bidder/tenders/${tender.id}/analyze`}
             className="block p-4 hover:bg-neutral-50 transition-colors"
           >
             <div className="text-sm font-medium text-neutral-900">

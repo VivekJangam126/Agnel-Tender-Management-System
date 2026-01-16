@@ -1,9 +1,15 @@
 import { Pool } from 'pg';
+import dns from 'dns';
 import { env, loadEnv } from './env.js';
+
+// Force IPv4 DNS resolution to avoid ENETUNREACH on IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 loadEnv();
 
-// Use DATABASE_URL for Supabase connection
+// Parse the DATABASE_URL to extract components
+const url = new URL(env.DATABASE_URL);
+
 const poolConfig = {
   connectionString: env.DATABASE_URL,
   ssl: {

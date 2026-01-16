@@ -2,7 +2,7 @@
  * Proposal Export Service
  *
  * Client-side service for proposal export functionality.
- * Currently provides stub methods - ready to connect to backend when available.
+ * Connected to backend API endpoints.
  *
  * @module proposalExportService
  */
@@ -47,28 +47,14 @@ export const proposalExportService = {
     const { format = 'pdf', template = 'formal' } = options;
 
     try {
-      // TODO: Connect to backend when available
-      // const response = await api.get(`/proposals/${proposalId}/export`, {
-      //   params: { format, template },
-      //   responseType: 'blob'
-      // });
-      // return response.data;
-
-      // STUB: Simulate export delay and return mock response
-      console.log(`[Export Service] Exporting proposal ${proposalId} as ${format} with ${template} template`);
-
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing
-
-      // Return a mock blob for now
-      const mockContent = `Mock ${format.toUpperCase()} export - Proposal ID: ${proposalId}, Template: ${template}`;
-      const blob = new Blob([mockContent], {
-        type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      const response = await api.get(`/bidder/proposals/${proposalId}/export`, {
+        params: { format, template },
+        responseType: 'blob'
       });
-
-      return blob;
+      return response.data;
     } catch (error) {
       console.error('[Export Service] Export failed:', error);
-      throw new Error(error.response?.data?.message || 'Failed to export proposal');
+      throw new Error(error.response?.data?.message || error.response?.data?.error || 'Failed to export proposal');
     }
   },
 
@@ -81,27 +67,13 @@ export const proposalExportService = {
    */
   getExportPreview: async (proposalId, template = 'formal') => {
     try {
-      // TODO: Connect to backend when available
-      // const response = await api.get(`/proposals/${proposalId}/export/preview`, {
-      //   params: { template }
-      // });
-      // return response.data;
-
-      // STUB: Return mock preview data
-      console.log(`[Export Service] Getting preview for proposal ${proposalId}`);
-
-      return {
-        success: true,
-        data: {
-          title: 'Proposal Preview',
-          template,
-          sections: [],
-          generatedAt: new Date().toISOString()
-        }
-      };
+      const response = await api.get(`/bidder/proposals/${proposalId}/export/preview`, {
+        params: { template }
+      });
+      return response.data;
     } catch (error) {
       console.error('[Export Service] Preview failed:', error);
-      throw new Error('Failed to generate preview');
+      throw new Error(error.response?.data?.error || 'Failed to generate preview');
     }
   },
 

@@ -6,6 +6,10 @@
 -- psql -U postgres -h localhost -p 5432 -d tms -f ".\src\db\migrations\000_enable_extensions.sql"
 -- psql -U postgres -h localhost -p 5432 -d tms -f ".\src\db\migrations\001_create_organization.sql"
 -- ... and so on
+-- psql -U postgres -h localhost -p 5432 -d tms -f ".\src\db\migrations\011_proposal_versioning_and_publish.sql"
+
+-- NEW: Run the versioning and publish migration:
+-- psql -U postgres -h localhost -p 5432 -d tms -f ".\src\db\migrations\011_proposal_versioning_and_publish.sql"
 
 -- Quick verification queries after migration:
 

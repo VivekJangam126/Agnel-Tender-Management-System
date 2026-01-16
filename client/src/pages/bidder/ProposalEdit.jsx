@@ -44,7 +44,7 @@ const ProposalEdit = () => {
       setSubmitting(true);
       await proposalService.submitProposal(id);
       alert('Proposal submitted successfully!');
-      navigate('/proposals');
+      navigate('/bidder/proposal-drafting');
     } catch (error) {
       console.error('Failed to submit proposal:', error);
       alert(error.response?.data?.message || 'Failed to submit proposal');
@@ -55,40 +55,40 @@ const ProposalEdit = () => {
 
   if (loading) {
     return (
-      <Layout>
+      <BidderLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Loading />
         </div>
-      </Layout>
+      </BidderLayout>
     );
   }
 
   if (error) {
     return (
-      <Layout>
+      <BidderLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card>
             <p className="text-center text-red-600 py-12">{error}</p>
             <div className="text-center mt-4">
-              <Button onClick={() => navigate('/tenders/discover')}>
+              <Button onClick={() => navigate('/bidder/tenders')}>
                 Back to Tenders
               </Button>
             </div>
           </Card>
         </div>
-      </Layout>
+      </BidderLayout>
     );
   }
 
   if (!proposal) {
     return (
-      <Layout>
+      <BidderLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card>
             <p className="text-center text-gray-500 py-12">Proposal not found</p>
           </Card>
         </div>
-      </Layout>
+      </BidderLayout>
     );
   }
 
@@ -98,7 +98,7 @@ const ProposalEdit = () => {
         {/* Back Button */}
         <Button
           variant="secondary"
-          onClick={() => navigate('/proposals')}
+          onClick={() => navigate('/bidder/proposal-drafting')}
           className="mb-6"
         >
           <ArrowLeft className="h-5 w-5 mr-2" />

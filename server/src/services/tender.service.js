@@ -378,7 +378,7 @@ export const TenderService = {
       throw new Error('Cannot add sections to published tender');
     }
 
-    // Get the next order_index (start from 1, not 0)
+    // Get the next order_index (starts from 1, not 0)
     const orderResult = await pool.query(
       'SELECT COALESCE(MAX(order_index), 0) + 1 as next_order FROM tender_section WHERE tender_id = $1',
       [tenderId]
