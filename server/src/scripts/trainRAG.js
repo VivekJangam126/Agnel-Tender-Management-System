@@ -113,7 +113,7 @@ async function ingestTender(tenderId) {
     // Get tender details
     const tenderRes = await client.query(
       `SELECT t.tender_id, t.title, t.description, t.sector, t.tender_type, t.status,
-              o.organization_name
+              o.name as organization_name
        FROM tender t
        LEFT JOIN organization o ON t.organization_id = o.organization_id
        WHERE t.tender_id = $1`,

@@ -6,9 +6,9 @@ import { env } from '../config/env.js';
 export const EmbeddingService = {
   /**
    * Generate mock embedding for text.
-   * Returns a 1536-dimensional zero vector (compatible with pgvector)
+   * Returns a 1536-dimensional vector as pgvector-compatible string format
    * @param {string} text
-   * @returns {Promise<number[]>}
+   * @returns {Promise<string>} pgvector format: "[0.1, 0.2, ...]"
    */
   async embed(text) {
     if (!text || !text.trim()) {
@@ -19,14 +19,15 @@ export const EmbeddingService = {
     // This is NOT semantic embedding - just for compatibility
     const hash = simpleHash(text);
     const embedding = new Array(1536).fill(0);
-    
+
     // Distribute hash value across embedding dimensions for some variance
     for (let i = 0; i < 10; i++) {
       embedding[hash % 1536] = ((hash >> i) & 0xFF) / 255;
       embedding[(hash * (i + 1)) % 1536] = ((hash >> (i + 8)) & 0xFF) / 255;
     }
-    
-    return embedding;
+
+    // Return as pgvector-compatible string format
+    return '[' + embedding.join(',') + ']';
   },
 };
 

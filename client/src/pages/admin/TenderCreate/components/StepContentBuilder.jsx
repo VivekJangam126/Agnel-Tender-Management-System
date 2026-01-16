@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Lock, FileText, AlertCircle } from "lucide-react";
 import AIAssistant from "../../../../components/admin/AIAssistant";
-import useAuth from "../../../../hooks/useAuth";
 
 // Pre-defined mandatory sections with semantic clarity
 const MANDATORY_SECTIONS = [
@@ -58,7 +57,6 @@ const OPTIONAL_SECTION = {
 };
 
 export default function StepContentBuilder({ data, onUpdate, onValidationChange, tenderMetadata, token }) {
-  const { user } = useAuth();
   
   const [sections, setSections] = useState(() => {
     // Initialize sections from data or create default structure
@@ -319,16 +317,18 @@ export default function StepContentBuilder({ data, onUpdate, onValidationChange,
         </div>
 
         {/* Right Panel - AI Assistant */}
-        <div className="col-span-4 sticky top-6">
-          <AIAssistant 
-            currentSectionKey={selectedSectionKey}
-            currentSectionTitle={selectedSection?.title}
-            currentContent={selectedSection?.content}
-            tenderMetadata={tenderMetadata}
-            allSections={sections}
-            onApplySuggestion={handleApplyAISuggestion}
-            token={token}
-          />
+        <div className="col-span-4">
+          <div className="sticky top-6">
+            <AIAssistant
+              currentSectionKey={selectedSectionKey}
+              currentSectionTitle={selectedSection?.title}
+              currentContent={selectedSection?.content}
+              tenderMetadata={tenderMetadata}
+              allSections={sections}
+              onApplySuggestion={handleApplyAISuggestion}
+              token={token}
+            />
+          </div>
         </div>
       </div>
     </div>

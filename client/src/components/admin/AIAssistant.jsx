@@ -1,15 +1,15 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, AlertCircle, CheckCircle2, XCircle, Zap, BookOpen } from "lucide-react";
+import { Send, AlertCircle, CheckCircle2, XCircle, Sparkles, BookOpen, MessageSquare, Bot, Loader2 } from "lucide-react";
 import { apiRequest } from "../../services/apiClient";
 
-export default function AIAssistant({ 
-  currentSectionKey, 
-  currentSectionTitle, 
+export default function AIAssistant({
+  currentSectionKey,
+  currentSectionTitle,
   currentContent,
   tenderMetadata,
   allSections,
   onApplySuggestion,
-  token 
+  token
 }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -25,6 +25,13 @@ export default function AIAssistant({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Quick prompts for common actions
+  const quickPrompts = [
+    { label: "Improve content", prompt: "Review and suggest improvements for this section" },
+    { label: "Check compliance", prompt: "Check if this section meets standard tender requirements" },
+    { label: "Add details", prompt: "Suggest additional details that should be included" },
+  ];
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
@@ -139,51 +146,60 @@ export default function AIAssistant({
     }
   };
 
+  const handleQuickPrompt = (prompt) => {
+    setInput(prompt);
+  };
+
   return (
-    <div className="col-span-4 flex flex-col h-full bg-white border border-neutral-200 rounded-lg overflow-hidden">
+    <div className="flex flex-col h-[600px] bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="px-4 py-4 bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-blue-600" />
-          <h3 className="text-sm font-semibold text-neutral-900">AI Drafting Assistant</h3>
+      <div className="px-4 py-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+            <Bot className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold">AI Drafting Assistant</h3>
+            <p className="text-xs text-white/80">Powered by AI</p>
+          </div>
         </div>
 
         {/* Context Info */}
-        <div className="text-xs text-neutral-600 mb-3">
+        <div className="mt-3 p-2 bg-white/10 rounded-lg">
           {mode === "section" ? (
-            <>
-              <p className="font-medium">
-                📋 Assisting: <span className="text-blue-700">{currentSectionTitle}</span>
-              </p>
-            </>
+            <p className="text-xs font-medium flex items-center gap-2">
+              <MessageSquare className="w-3.5 h-3.5" />
+              Assisting: <span className="text-white">{currentSectionTitle}</span>
+            </p>
           ) : (
-            <>
-              <p className="font-medium">📄 Reviewing entire tender</p>
-            </>
+            <p className="text-xs font-medium flex items-center gap-2">
+              <BookOpen className="w-3.5 h-3.5" />
+              Reviewing entire tender
+            </p>
           )}
         </div>
 
         {/* Mode Toggle */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-3">
           <button
             onClick={() => setMode("section")}
-            className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${
+            className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
               mode === "section"
-                ? "bg-blue-600 text-white"
-                : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50"
+                ? "bg-white text-primary-700 shadow-sm"
+                : "bg-white/10 text-white hover:bg-white/20"
             }`}
           >
-            <span className="inline-block">📋 Section</span>
+            Section Mode
           </button>
           <button
             onClick={() => setMode("tender")}
-            className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${
+            className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
               mode === "tender"
-                ? "bg-blue-600 text-white"
-                : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50"
+                ? "bg-white text-primary-700 shadow-sm"
+                : "bg-white/10 text-white hover:bg-white/20"
             }`}
           >
-            <span className="inline-block">📄 Tender</span>
+            Full Tender
           </button>
         </div>
       </div>
@@ -191,32 +207,52 @@ export default function AIAssistant({
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-neutral-500">
-            <BookOpen className="w-12 h-12 text-neutral-300 mb-3" />
-            <p className="text-sm font-medium">Ask for assistance</p>
-            <p className="text-xs mt-1">
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mb-4">
+              <Sparkles className="w-8 h-8 text-primary-600" />
+            </div>
+            <p className="text-sm font-semibold text-neutral-900 mb-1">How can I help?</p>
+            <p className="text-xs text-neutral-500 mb-4">
               {mode === "section"
                 ? "I'll review your section and suggest improvements"
                 : "I'll review your entire tender and provide recommendations"}
             </p>
+
+            {/* Quick Prompts */}
+            <div className="w-full space-y-2">
+              <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Quick Actions</p>
+              {quickPrompts.map((qp, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleQuickPrompt(qp.prompt)}
+                  className="w-full text-left px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs text-neutral-700 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                >
+                  {qp.label}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>
             {messages.map(message => (
               <div key={message.id} className="space-y-3">
-                {/* Message */}
+                {/* User Message */}
                 {message.type === "user" && (
                   <div className="flex justify-end">
-                    <div className="max-w-xs bg-blue-600 text-white rounded-lg px-4 py-2.5 text-sm">
+                    <div className="max-w-[85%] bg-primary-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm shadow-sm">
                       {message.content}
                     </div>
                   </div>
                 )}
 
+                {/* Assistant Message */}
                 {message.type === "assistant" && (
-                  <div className="flex justify-start">
-                    <div className="max-w-full">
-                      <div className="text-xs font-medium text-neutral-600 mb-2">
+                  <div className="flex justify-start gap-2">
+                    <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Bot className="w-4 h-4 text-primary-600" />
+                    </div>
+                    <div className="max-w-[90%]">
+                      <div className="text-xs font-medium text-neutral-700 mb-2">
                         {message.content}
                       </div>
 
@@ -312,11 +348,14 @@ export default function AIAssistant({
                   </div>
                 )}
 
+                {/* Error Message */}
                 {message.type === "error" && (
-                  <div className="flex justify-start">
-                    <div className="max-w-xs bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-700 flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                      <span>{message.content}</span>
+                  <div className="flex justify-start gap-2">
+                    <div className="w-7 h-7 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <AlertCircle className="w-4 h-4 text-red-600" />
+                    </div>
+                    <div className="max-w-[85%] bg-red-50 border border-red-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-red-700">
+                      {message.content}
                     </div>
                   </div>
                 )}
@@ -334,7 +373,7 @@ export default function AIAssistant({
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyPress={e => {
+            onKeyDown={e => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSendMessage();
@@ -346,18 +385,23 @@ export default function AIAssistant({
                 : "Ask about the entire tender..."
             }
             disabled={loading}
-            className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-neutral-50"
+            className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-lg text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-neutral-100"
           />
           <button
             onClick={handleSendMessage}
             disabled={loading || !input.trim()}
-            className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-neutral-300 disabled:cursor-not-allowed flex items-center gap-1"
+            className="px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:bg-neutral-300 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            <Send className="w-4 h-4" />
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
           </button>
         </div>
-        <p className="text-xs text-neutral-500 mt-2">
-          ℹ️ AI reviews your content and suggests improvements. Changes only apply when you click "Apply".
+        <p className="text-xs text-neutral-500 mt-2 flex items-center gap-1">
+          <Sparkles className="w-3 h-3" />
+          AI suggestions are applied only when you click "Apply"
         </p>
       </div>
     </div>

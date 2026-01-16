@@ -62,6 +62,8 @@ export const env = (() => {
     DATABASE_URL: process.env.DATABASE_URL,
     GROQ_API_KEY: process.env.GROQ_API_KEY,
     JWT_SECRET: process.env.JWT_SECRET,
+    // OpenAI API (for embeddings and proposal drafting)
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     // Optional AI tuning
     GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
     AI_TEMPERATURE: process.env.AI_TEMPERATURE || '0',

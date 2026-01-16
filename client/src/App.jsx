@@ -28,6 +28,9 @@ import ProposalPublishedView from "./pages/bidder/ProposalPublishedView";
 import ProposalDrafting from "./pages/bidder/ProposalDrafting";
 import BidderHistory from "./pages/bidder/BidderHistory";
 import AnalyzePage from "./pages/bidder/AnalyzePage";
+import SavedTendersPage from "./pages/bidder/SavedTendersPage";
+import BidderProfile from "./pages/bidder/BidderProfile";
+import PDFTenderAnalysis from "./pages/bidder/PDFTenderAnalysis";
 import TenderCreate from "./pages/admin/TenderCreate/TenderCreate";
 import Analytics from "./pages/admin/Analytics/Analytics";
 import Profile from "./pages/admin/Profile/Profile";
@@ -89,6 +92,9 @@ export default function App() {
             <Route path="/bidder/proposal/published/:proposalId" element={<ProposalPublishedView />} />
             <Route path="/bidder/proposal-drafting" element={<ProposalDrafting />} />
             <Route path="/bidder/history" element={<BidderHistory />} />
+            <Route path="/bidder/saved-tenders" element={<SavedTendersPage />} />
+            <Route path="/bidder/profile" element={<BidderProfile />} />
+            <Route path="/bidder/pdf-analyze" element={<PDFTenderAnalysis />} />
           </Route>
 
           {/* Fallback */}

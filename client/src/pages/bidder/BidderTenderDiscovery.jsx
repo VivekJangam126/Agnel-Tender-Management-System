@@ -231,38 +231,23 @@ export default function BidderTenderDiscovery() {
 
   const handleFileUpload = async (file) => {
     if (!file) return;
-    
-    const validTypes = ['application/pdf', 'application/msword', 
-                       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!validTypes.includes(file.type)) {
-      setUploadError('Please upload a PDF or Word document (PDF, DOC, DOCX)');
+
+    // Only accept PDF files
+    if (file.type !== 'application/pdf') {
+      setUploadError('Please upload a PDF document');
       return;
     }
-    
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('File size should be less than 10MB');
+
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadError('File size should be less than 15MB');
       return;
     }
-    
-    setUploadLoading(true);
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      navigate('/bidder/tenders/analyze', {
-        state: {
-          uploadedFile: file.name,
-          fileType: file.type,
-          analyzeMode: 'upload'
-        }
-      });
-      
-      setShowUploadModal(false);
-    } catch (err) {
-      setUploadError('Failed to upload file. Please try again.');
-    } finally {
-      setUploadLoading(false);
-    }
+
+    // Navigate to PDF analysis page with the file
+    setShowUploadModal(false);
+    navigate('/bidder/pdf-analyze', {
+      state: { file }
+    });
   };
 
   const handleUrlSubmit = async (e) => {
@@ -613,18 +598,21 @@ export default function BidderTenderDiscovery() {
                       <Upload className="w-10 h-10 text-blue-500" />
                     </div>
                     <p className="text-slate-600 mb-2">
-                      Upload tender document for analysis
+                      Upload tender PDF for AI analysis
                     </p>
                     <p className="text-sm text-slate-500">
-                      Supported: PDF, DOC, DOCX • Max 10MB
+                      Get summary, proposal draft & evaluation
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      PDF files up to 15MB
                     </p>
                   </div>
-                  
+
                   <input
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileInputChange}
-                    accept=".pdf,.doc,.docx"
+                    accept=".pdf"
                     className="hidden"
                   />
                   
