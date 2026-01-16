@@ -54,12 +54,12 @@ export default function SavedTenders() {
     try {
       const proposal = await proposalService.createDraft(tenderId, token);
       setProposals((prev) => [proposal, ...prev]);
-      navigate(`/bidder/proposals/${proposal.proposal_id}`);
+      navigate(`/bidder/proposal/${tenderId}`);
     } catch (err) {
       if (err.status === 400 && err.message?.includes("exists")) {
         const existing = proposalByTender.get(tenderId);
         if (existing) {
-          navigate(`/bidder/proposals/${existing.proposal_id}`);
+          navigate(`/bidder/proposal/${tenderId}`);
           return;
         }
         setError("You already have a proposal for this tender.");
@@ -114,14 +114,14 @@ export default function SavedTenders() {
                 )}
                 <div className="flex gap-3 mt-4">
                   <Link
-                    to={`/tender/${tender.tender_id}`}
+                    to={`/bidder/tenders/${tender.tender_id}/analyze`}
                     className="text-primary-600 text-sm hover:underline"
                   >
                     View Tender
                   </Link>
                   {existing ? (
                     <button
-                      onClick={() => navigate(`/bidder/proposals/${existing.proposal_id}`)}
+                      onClick={() => navigate(`/bidder/proposal/${tender.tender_id}`)}
                       className="text-primary-700 text-sm hover:underline"
                     >
                       View Proposal
