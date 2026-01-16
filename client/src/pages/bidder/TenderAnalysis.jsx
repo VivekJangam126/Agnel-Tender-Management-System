@@ -74,26 +74,43 @@ function TenderAnalysis() {
 
       console.log('Tender data:', tenderData);
       console.log('Sections data:', sectionsData);
-      
+
+      // Use real statistics from backend
+      const stats = tenderData.statistics || {};
+
       setTender({
         title: tenderData.title,
         organization: tenderData.organizationId?.organizationName || 'Organization',
         publishedAt: tenderData.createdAt,
         closedAt: tenderData.deadline,
-        daysRemaining: tenderData.deadline 
+        daysRemaining: tenderData.deadline
           ? Math.max(0, Math.ceil((new Date(tenderData.deadline) - new Date()) / (1000 * 60 * 60 * 24)))
           : 0,
-        estimatedValue: tenderData.value ? `$${(tenderData.value / 1000000).toFixed(1)}M` : 'N/A',
-        proposalCount: Math.floor(Math.random() * 25) + 5, // Mock data for now
-        description: tenderData.description
+        estimatedValue: tenderData.value
+          ? (tenderData.value >= 10000000 ? `₹${(tenderData.value / 10000000).toFixed(1)}Cr` :
+             tenderData.value >= 100000 ? `₹${(tenderData.value / 100000).toFixed(1)}L` :
+             `₹${tenderData.value.toLocaleString()}`)
+          : 'N/A',
+        proposalCount: stats.proposalCount || 0, // Real proposal count from DB
+        description: tenderData.description,
+        // Additional statistics for display
+        statistics: {
+          wordCount: stats.wordCount || 0,
+          sectionCount: stats.sectionCount || 0,
+          estimatedReadTime: stats.estimatedReadTime || 0,
+          mandatorySections: stats.mandatorySections || 0
+        }
       });
 
-      // Transform sections
+      // Transform sections with real complexity scores from backend
       const transformedSections = (sectionsData || []).map(section => ({
         name: section.title || section.sectionTitle || section.sectionName,
         content: section.content || section.description || 'No content available',
         keyPoints: section.keyPoints || [],
-        complexity: section.complexity || 'Medium'
+        complexity: section.complexity || 'Medium',
+        complexityScore: section.complexityScore || 0,
+        wordCount: section.wordCount || 0,
+        isMandatory: section.isMandatory || false
       }));
       
       setSections(transformedSections);
@@ -166,26 +183,13 @@ function TenderAnalysis() {
     setAiLoading(true);
 
     try {
-      // Call AI API with dynamic tender context
-      const response = await aiService.proposalHelp({
-        question,
-        context: {
-          tenderId: id,
-          tenderTitle: tender?.title,
-          tenderDescription: tender?.description,
-          sections: sections.map(s => ({
-            name: s.name,
-            content: s.content.substring(0, 500),
-            keyPoints: s.keyPoints
-          })),
-          aiInsights
-        }
-      });
+      // Use RAG-based tender chat with vector similarity search
+      const response = await aiService.tenderChat(id, question);
 
       let aiResponse = 'Could not process your question at this time.';
-      
-      if (response.data && response.data.response) {
-        aiResponse = response.data.response;
+
+      if (response.data && response.data.answer) {
+        aiResponse = response.data.answer;
       }
 
       setChatMessages(prev => [...prev, {
@@ -195,10 +199,10 @@ function TenderAnalysis() {
       }]);
     } catch (err) {
       console.error('Error getting AI response:', err);
-      
+
       // Fallback response based on question keywords
       let fallbackResponse = generateFallbackResponse(question);
-      
+
       setChatMessages(prev => [...prev, {
         role: 'assistant',
         content: fallbackResponse,
