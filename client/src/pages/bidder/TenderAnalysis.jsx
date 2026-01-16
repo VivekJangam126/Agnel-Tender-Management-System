@@ -25,6 +25,7 @@ function TenderAnalysis() {
   const [tender, setTender] = useState(null);
   const [sections, setSections] = useState([]);
   const [aiInsights, setAiInsights] = useState(null);
+  const [tenderSummary, setTenderSummary] = useState(null);
   
   // Chat State
   const [chatMessages, setChatMessages] = useState([
@@ -116,9 +117,10 @@ function TenderAnalysis() {
       setSections(transformedSections);
       setExpandedSections([0]);
 
-      // Generate AI insights
+      // Generate AI insights and fetch tender summary in parallel
       if (tenderData && transformedSections.length > 0) {
         generateAIInsights(tenderData, transformedSections);
+        fetchTenderSummary();
       }
     } catch (err) {
       console.error('Error fetching tender:', err);
@@ -162,6 +164,19 @@ function TenderAnalysis() {
         concerns: ['AI analysis pending'],
         recommendations: ['Review tender details']
       });
+    }
+  };
+
+  // Fetch AI-powered tender summary for Insights tab
+  const fetchTenderSummary = async () => {
+    try {
+      const response = await aiService.getTenderSummary(id);
+      if (response.data && response.data.data) {
+        setTenderSummary(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching tender summary:', err);
+      // Summary is optional - InsightsTab will fallback to aiInsights
     }
   };
 
@@ -329,7 +344,7 @@ function TenderAnalysis() {
               )}
 
               {activeTab === 'insights' && (
-                <InsightsTab aiInsights={aiInsights} />
+                <InsightsTab aiInsights={aiInsights} tenderSummary={tenderSummary} />
               )}
             </div>
           </div>
