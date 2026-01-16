@@ -4,6 +4,8 @@ import { ProposalService } from '../services/proposal.service.js';
 import { ProposalExportService } from '../services/proposal-export.service.js';
 import { ProposalPublishService } from '../services/proposal-publish.service.js';
 import { AIService } from '../services/ai.service.js';
+import { TenderSummarizerService } from '../services/tenderSummarizer.service.js';
+import { ProposalDrafterService } from '../services/proposalDrafter.service.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
 import { aiRateLimiter } from '../middlewares/rate-limit.middleware.js';
@@ -235,21 +237,20 @@ router.post('/tenders/:id/analyze', requireAuth, requireRole('BIDDER'), aiRateLi
   try {
     const { id: tenderId } = req.params;
     const { question } = req.body;
-    
+
     // Verify tender exists and is published
     const tender = await TenderService.getTenderById(tenderId, req.user);
     if (tender.status !== 'PUBLISHED') {
       return res.status(403).json({ error: 'This tender is not available' });
     }
-    
+
     // Use AI to analyze tender
-    const analysis = await AIService.queryTender(
+    const analysis = await AIService.queryTenderAI(
       tenderId,
-      question || 'Analyze this tender for risks, eligibility requirements, and key considerations.',
-      req.user
+      question || 'Analyze this tender for risks, eligibility requirements, and key considerations.'
     );
-    
-    res.json({ 
+
+    res.json({
       tenderId,
       analysis,
       advisory: true,
@@ -262,6 +263,391 @@ router.post('/tenders/:id/analyze', requireAuth, requireRole('BIDDER'), aiRateLi
     if (err.message?.includes('rate limit')) {
       return res.status(429).json({ error: 'Too many requests, please try again later' });
     }
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/tenders/:id/summary
+ * AI-powered Tender Summarizer - comprehensive analysis for bidders
+ * Returns: executive summary, key requirements, risks, opportunity score
+ */
+router.get('/tenders/:id/summary', requireAuth, requireRole('BIDDER'), aiRateLimiter, async (req, res, next) => {
+  try {
+    const { id: tenderId } = req.params;
+
+    // Fetch tender with sections
+    const tenderData = await TenderService.getTenderById(tenderId, req.user);
+    if (tenderData.status !== 'PUBLISHED') {
+      return res.status(403).json({ error: 'This tender is not available' });
+    }
+
+    // Get proposal count
+    const proposalCountQuery = await pool.query(
+      `SELECT COUNT(*) as count FROM proposal WHERE tender_id = $1`,
+      [tenderId]
+    );
+    const proposalCount = parseInt(proposalCountQuery.rows[0].count) || 0;
+
+    // Calculate tender metrics
+    const sections = tenderData.sections || [];
+    const allContent = (tenderData.description || '') + ' ' +
+      sections.map(s => (s.content || s.description || '')).join(' ');
+
+    const wordCount = allContent.trim().split(/\s+/).filter(w => w.length > 0).length;
+    const mandatorySections = sections.filter(s => s.is_mandatory).length;
+
+    // Extract key terms from content
+    const extractKeyTerms = (text) => {
+      const terms = {
+        eligibility: [],
+        technical: [],
+        financial: [],
+        timeline: [],
+        compliance: []
+      };
+
+      const textLower = text.toLowerCase();
+
+      // Eligibility keywords
+      if (textLower.includes('experience')) terms.eligibility.push('Prior experience required');
+      if (textLower.includes('certification') || textLower.includes('iso')) terms.eligibility.push('Certifications needed');
+      if (textLower.includes('turnover')) terms.eligibility.push('Financial turnover criteria');
+      if (textLower.includes('registration')) terms.eligibility.push('Registration requirements');
+
+      // Technical keywords
+      if (textLower.includes('specification')) terms.technical.push('Technical specifications defined');
+      if (textLower.includes('quality')) terms.technical.push('Quality standards mentioned');
+      if (textLower.includes('methodology')) terms.technical.push('Methodology required');
+
+      // Financial keywords
+      if (textLower.includes('emd') || textLower.includes('earnest money')) terms.financial.push('EMD required');
+      if (textLower.includes('performance guarantee')) terms.financial.push('Performance guarantee needed');
+      if (textLower.includes('payment')) terms.financial.push('Payment terms specified');
+
+      // Timeline keywords
+      const deadlineMatch = textLower.match(/(\d+)\s*(days?|weeks?|months?)/);
+      if (deadlineMatch) terms.timeline.push(`${deadlineMatch[0]} timeline mentioned`);
+
+      // Compliance keywords
+      if (textLower.includes('penalty') || textLower.includes('liquidated damages')) terms.compliance.push('Penalty clauses present');
+      if (textLower.includes('warranty')) terms.compliance.push('Warranty requirements');
+
+      return terms;
+    };
+
+    const keyTerms = extractKeyTerms(allContent);
+
+    // Calculate opportunity score based on multiple factors
+    const calculateOpportunityScore = () => {
+      let score = 70; // Base score
+
+      // Competition factor (-5 to +10)
+      if (proposalCount === 0) score += 10;
+      else if (proposalCount <= 3) score += 5;
+      else if (proposalCount >= 10) score -= 5;
+
+      // Deadline factor
+      const deadline = tenderData.submission_deadline ? new Date(tenderData.submission_deadline) : null;
+      const daysRemaining = deadline ? Math.ceil((deadline - new Date()) / (1000 * 60 * 60 * 24)) : 30;
+      if (daysRemaining > 30) score += 5;
+      else if (daysRemaining <= 7) score -= 10;
+
+      // Complexity factor
+      const avgComplexity = wordCount / Math.max(sections.length, 1);
+      if (avgComplexity < 200) score += 5; // Simple tender
+      else if (avgComplexity > 500) score -= 5; // Complex tender
+
+      // Value factor
+      const value = parseFloat(tenderData.estimated_value) || 0;
+      if (value >= 10000000) score += 5; // High value opportunity
+
+      return Math.min(100, Math.max(0, score));
+    };
+
+    const opportunityScore = calculateOpportunityScore();
+
+    // Determine urgency level
+    const deadline = tenderData.submission_deadline ? new Date(tenderData.submission_deadline) : null;
+    const daysRemaining = deadline ? Math.max(0, Math.ceil((deadline - new Date()) / (1000 * 60 * 60 * 24))) : null;
+    let urgency = 'LOW';
+    if (daysRemaining !== null) {
+      if (daysRemaining <= 7) urgency = 'CRITICAL';
+      else if (daysRemaining <= 14) urgency = 'HIGH';
+      else if (daysRemaining <= 30) urgency = 'MEDIUM';
+    }
+
+    // Generate executive summary (rule-based for speed, fallback if AI unavailable)
+    const generateExecutiveSummary = () => {
+      const value = parseFloat(tenderData.estimated_value) || 0;
+      const valueStr = value >= 10000000 ? `₹${(value / 10000000).toFixed(1)} Crore` :
+                       value >= 100000 ? `₹${(value / 100000).toFixed(1)} Lakh` :
+                       value > 0 ? `₹${value.toLocaleString()}` : 'Not specified';
+
+      return `This tender from ${tenderData.organization_name || 'the issuing authority'} is for "${tenderData.title}". ` +
+        `The estimated value is ${valueStr} with ${sections.length} sections (${mandatorySections} mandatory). ` +
+        `Currently ${proposalCount} bidder(s) have shown interest. ` +
+        (daysRemaining !== null ? `Submission deadline is in ${daysRemaining} days.` : '');
+    };
+
+    // Build key requirements list
+    const keyRequirements = [];
+    if (mandatorySections > 0) keyRequirements.push(`Complete all ${mandatorySections} mandatory sections`);
+    keyTerms.eligibility.forEach(t => keyRequirements.push(t));
+    keyTerms.technical.forEach(t => keyRequirements.push(t));
+    keyTerms.financial.forEach(t => keyRequirements.push(t));
+
+    // Build risk factors
+    const riskFactors = [];
+    if (proposalCount >= 10) riskFactors.push('High competition - 10+ bidders');
+    else if (proposalCount >= 5) riskFactors.push('Moderate competition');
+    if (daysRemaining !== null && daysRemaining <= 14) riskFactors.push('Tight deadline - less than 2 weeks');
+    if (wordCount > 2000) riskFactors.push('Complex tender document - thorough review needed');
+    keyTerms.compliance.forEach(t => riskFactors.push(t));
+
+    // Build recommended actions
+    const recommendedActions = [];
+    if (daysRemaining !== null && daysRemaining <= 7) {
+      recommendedActions.push('URGENT: Start proposal immediately');
+    }
+    if (mandatorySections > 3) {
+      recommendedActions.push('Allocate time for all mandatory sections');
+    }
+    if (keyTerms.eligibility.length > 0) {
+      recommendedActions.push('Verify you meet all eligibility criteria first');
+    }
+    if (keyTerms.financial.length > 0) {
+      recommendedActions.push('Prepare financial documents (EMD, bank guarantees)');
+    }
+    recommendedActions.push('Use AI assistant to understand requirements');
+
+    // Try to get AI-generated insights (non-blocking)
+    let aiSummary = null;
+    try {
+      const aiResponse = await AIService.queryTenderAI(
+        tenderId,
+        'In 2 sentences, what is this tender about and who should bid for it?'
+      );
+      if (aiResponse && aiResponse.length > 20) {
+        aiSummary = aiResponse;
+      }
+    } catch (aiErr) {
+      console.log('[Tender Summary] AI summary unavailable, using rule-based');
+    }
+
+    res.json({
+      success: true,
+      data: {
+        tenderId,
+        tenderTitle: tenderData.title,
+        organization: tenderData.organization_name,
+
+        // Executive Summary
+        executiveSummary: aiSummary || generateExecutiveSummary(),
+
+        // Key Metrics
+        metrics: {
+          estimatedValue: parseFloat(tenderData.estimated_value) || 0,
+          formattedValue: parseFloat(tenderData.estimated_value) >= 10000000
+            ? `₹${(parseFloat(tenderData.estimated_value) / 10000000).toFixed(1)}Cr`
+            : parseFloat(tenderData.estimated_value) >= 100000
+            ? `₹${(parseFloat(tenderData.estimated_value) / 100000).toFixed(1)}L`
+            : `₹${(parseFloat(tenderData.estimated_value) || 0).toLocaleString()}`,
+          wordCount,
+          sectionCount: sections.length,
+          mandatorySections,
+          proposalCount,
+          daysRemaining,
+          deadline: tenderData.submission_deadline
+        },
+
+        // Scoring
+        opportunityScore,
+        urgency,
+        competitionLevel: proposalCount >= 10 ? 'HIGH' : proposalCount >= 5 ? 'MEDIUM' : 'LOW',
+
+        // Extracted Requirements
+        keyRequirements: keyRequirements.slice(0, 8),
+        keyTerms,
+
+        // Risk Assessment
+        riskFactors: riskFactors.slice(0, 5),
+
+        // Recommendations
+        recommendedActions: recommendedActions.slice(0, 5),
+
+        // Metadata
+        generatedAt: new Date().toISOString(),
+        isAIEnhanced: !!aiSummary
+      }
+    });
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/tenders/:id/ai-summary
+ * AI-powered comprehensive tender summary with bullet points
+ * Returns: executive summary, bullet points by category, section summaries, action items
+ */
+router.get('/tenders/:id/ai-summary', requireAuth, requireRole('BIDDER'), aiRateLimiter, async (req, res, next) => {
+  try {
+    const { id: tenderId } = req.params;
+
+    const summary = await TenderSummarizerService.generateComprehensiveSummary(tenderId);
+
+    res.json({
+      success: true,
+      data: summary,
+    });
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    if (err.message?.includes('must be published')) {
+      return res.status(403).json({ error: err.message });
+    }
+    console.error('[AI Summary] Error:', err.message);
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/tenders/:id/quick-summary
+ * Quick AI summary for list views (lighter weight)
+ */
+router.get('/tenders/:id/quick-summary', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id: tenderId } = req.params;
+
+    const summary = await TenderSummarizerService.generateQuickSummary(tenderId);
+
+    res.json({
+      success: true,
+      data: summary,
+    });
+  } catch (err) {
+    if (err.message === 'Tender not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/tenders/:id/generate-section-draft
+ * Generate AI draft for a specific tender section
+ * Body: { sectionId, sectionType, tenderRequirement, organizationContext?, customInstructions? }
+ */
+router.post('/tenders/:id/generate-section-draft', requireAuth, requireRole('BIDDER'), aiRateLimiter, async (req, res, next) => {
+  try {
+    const { id: tenderId } = req.params;
+    const { sectionId, sectionType, tenderRequirement, organizationContext, customInstructions } = req.body;
+
+    if (!sectionType) {
+      return res.status(400).json({ error: 'sectionType is required' });
+    }
+
+    const draft = await ProposalDrafterService.generateSectionDraft({
+      tenderId,
+      sectionId,
+      sectionType: sectionType.toUpperCase(),
+      tenderRequirement,
+      organizationContext,
+      customInstructions,
+    });
+
+    res.json({
+      success: true,
+      data: draft,
+    });
+  } catch (err) {
+    console.error('[Generate Draft] Error:', err.message);
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/tenders/:id/generate-full-draft
+ * Generate AI draft for all sections of a tender
+ * Body: { organizationContext? }
+ */
+router.post('/tenders/:id/generate-full-draft', requireAuth, requireRole('BIDDER'), aiRateLimiter, async (req, res, next) => {
+  try {
+    const { id: tenderId } = req.params;
+    const { organizationContext } = req.body;
+
+    const drafts = await ProposalDrafterService.generateFullProposalDraft(tenderId, organizationContext);
+
+    res.json({
+      success: true,
+      data: drafts,
+    });
+  } catch (err) {
+    console.error('[Generate Full Draft] Error:', err.message);
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/proposals/:id/improve-draft
+ * Improve existing draft content with AI
+ * Body: { existingDraft, sectionType, tenderRequirement, improvementFocus }
+ */
+router.post('/proposals/:id/improve-draft', requireAuth, requireRole('BIDDER'), aiRateLimiter, async (req, res, next) => {
+  try {
+    const { existingDraft, sectionType, tenderRequirement, improvementFocus } = req.body;
+
+    if (!existingDraft) {
+      return res.status(400).json({ error: 'existingDraft is required' });
+    }
+
+    const improved = await ProposalDrafterService.improveDraft({
+      existingDraft,
+      sectionType: sectionType?.toUpperCase() || 'TECHNICAL',
+      tenderRequirement,
+      improvementFocus: improvementFocus || 'professional',
+    });
+
+    res.json({
+      success: true,
+      data: improved,
+    });
+  } catch (err) {
+    console.error('[Improve Draft] Error:', err.message);
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/proposals/generate-snippet
+ * Generate a content snippet for inline assistance
+ * Body: { snippetType, context, length }
+ */
+router.post('/proposals/generate-snippet', requireAuth, requireRole('BIDDER'), aiRateLimiter, async (req, res, next) => {
+  try {
+    const { snippetType, context, length } = req.body;
+
+    if (!snippetType) {
+      return res.status(400).json({ error: 'snippetType is required' });
+    }
+
+    const snippet = await ProposalDrafterService.generateSnippet({
+      snippetType,
+      context,
+      length: length || 'medium',
+    });
+
+    res.json({
+      success: true,
+      data: snippet,
+    });
+  } catch (err) {
+    console.error('[Generate Snippet] Error:', err.message);
     next(err);
   }
 });

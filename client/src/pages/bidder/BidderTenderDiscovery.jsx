@@ -312,13 +312,6 @@ export default function BidderTenderDiscovery() {
     return { label: 'Low', color: 'green' };
   };
 
-  const stats = [
-    { label: 'Available Tenders', value: tenders.length.toString(), icon: FileText, color: 'blue' },
-    { label: 'Avg. Competition', value: '18', icon: Users, color: 'purple' },
-    { label: 'Closing Soon', value: '12', icon: Clock, color: 'orange' },
-    { label: 'Total Value', value: '$42M', icon: TrendingUp, color: 'green' }
-  ];
-
   if (loading && tenders.length === 0) {
     return (
       <BidderLayout>

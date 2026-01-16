@@ -24,6 +24,15 @@ export const aiService = {
     return response;
   },
 
+  /**
+   * Get comprehensive tender summary with AI-powered analysis
+   * Returns: executive summary, key requirements, risks, opportunity score
+   */
+  getTenderSummary: async (tenderId) => {
+    const response = await api.get('/bidder/tenders/' + tenderId + '/summary');
+    return response;
+  },
+
   suggestSections: async (data) => {
     const response = await api.post('/ai/suggest-sections', data);
     return response;
