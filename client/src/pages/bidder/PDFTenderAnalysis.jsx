@@ -28,9 +28,15 @@ import {
   Building2,
   Landmark,
   Minimize2,
+  Users,
 } from 'lucide-react';
 import BidderLayout from '../../components/bidder-layout/BidderLayout';
 import { pdfAnalysisService } from '../../services/bidder/pdfAnalysisService';
+
+// Collaboration imports
+import { CollaborationProvider, useCollaboration } from '../../context/CollaborationContext';
+import CollaborativeProposalEditor from '../../components/proposal/CollaborativeProposalEditor';
+import ValidationResultsPanel from '../../components/proposal/ValidationResultsPanel';
 
 // Tab components
 const TabButton = ({ active, onClick, children, icon: Icon }) => (
@@ -91,6 +97,296 @@ const BulletList = ({ items, icon: Icon = CheckCircle, color = 'blue' }) => (
     ))}
   </ul>
 );
+
+/**
+ * Collaborative Proposal Tab Component
+ * Displays section list with collaborative editing features
+ */
+function CollaborativeProposalTab({
+  savedTenderId,
+  analysis,
+  proposalSections,
+  setProposalSections,
+  onEvaluate,
+  evaluating,
+  onSaveDraft,
+  savingDraft,
+  draftSaved,
+}) {
+  const {
+    isOwner,
+    assignments,
+    loading: collaborationLoading,
+  } = useCollaboration();
+
+  const [activeSection, setActiveSection] = useState(null);
+  const [sectionContents, setSectionContents] = useState({});
+  const [showValidation, setShowValidation] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState({});
+
+  // Initialize sections from normalizedSections or proposalSections
+  const sections = React.useMemo(() => {
+    if (analysis?.normalizedSections?.length > 0) {
+      return analysis.normalizedSections.map((section, idx) => ({
+        ...section,
+        section_id: section.key || `section-${idx}`,
+        title: section.name || section.title || `Section ${idx + 1}`,
+        content: section.aiSummary || '',
+      }));
+    }
+    return proposalSections.map((section) => ({
+      ...section,
+      section_id: section.id || section.key,
+      title: section.title,
+    }));
+  }, [analysis?.normalizedSections, proposalSections]);
+
+  // Initialize content from sections - run once on mount and when proposalSections changes
+  useEffect(() => {
+    const contents = {};
+    proposalSections.forEach((section) => {
+      const sectionId = section.id || section.key;
+      contents[sectionId] = section.content || '';
+    });
+    setSectionContents(contents);
+  }, [proposalSections]);
+
+  // Set first section as active on mount
+  useEffect(() => {
+    if (sections.length > 0 && !activeSection) {
+      setActiveSection(sections[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections.length]); // Only depend on length, not the array itself
+
+  // Handle content change
+  const handleContentChange = (newContent) => {
+    if (!activeSection) return;
+    const sectionId = activeSection.section_id || activeSection.id || activeSection.key;
+    setSectionContents((prev) => ({
+      ...prev,
+      [sectionId]: newContent,
+    }));
+
+    // Also update proposalSections for evaluation
+    setProposalSections((prev) =>
+      prev.map((s) =>
+        (s.id === sectionId || s.key === sectionId)
+          ? { ...s, content: newContent, wordCount: newContent.split(/\s+/).filter((w) => w).length }
+          : s
+      )
+    );
+  };
+
+  // Handle save
+  const handleSave = async () => {
+    if (!activeSection) return;
+    const sectionId = activeSection.section_id || activeSection.id || activeSection.key;
+    setSaving(true);
+
+    try {
+      // Call the parent's save function
+      await onSaveDraft();
+      setLastSaved((prev) => ({
+        ...prev,
+        [sectionId]: new Date(),
+      }));
+    } catch (err) {
+      console.error('Save error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Get section status
+  const getSectionStatus = (section) => {
+    const sectionId = section.section_id || section.id || section.key;
+    const content = sectionContents[sectionId] || '';
+    const wordCount = content.trim().split(/\s+/).filter((w) => w).length;
+
+    if (wordCount >= 50) return 'complete';
+    if (wordCount > 0) return 'partial';
+    return 'empty';
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'complete':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'partial':
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+      default:
+        return <FileText className="w-4 h-4 text-slate-300" />;
+    }
+  };
+
+  const activeSectionId = activeSection
+    ? activeSection.section_id || activeSection.id || activeSection.key
+    : null;
+
+  if (collaborationLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-6">
+      {/* Section List - Left Sidebar */}
+      <div className="w-72 flex-shrink-0">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900">Sections</h3>
+              <span className="text-xs text-slate-500">
+                {sections.filter((s) => getSectionStatus(s) === 'complete').length}/{sections.length}
+              </span>
+            </div>
+          </div>
+
+          {/* Section List */}
+          <div className="max-h-[600px] overflow-y-auto">
+            {sections.map((section) => {
+              const sectionId = section.section_id || section.id || section.key;
+              const isActive = activeSectionId === sectionId;
+              const status = getSectionStatus(section);
+              const assignees = assignments[sectionId] || [];
+
+              return (
+                <button
+                  key={sectionId}
+                  onClick={() => setActiveSection(section)}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors border-b border-slate-100 ${
+                    isActive
+                      ? 'bg-blue-50 border-l-2 border-l-blue-600'
+                      : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="mt-0.5">{getStatusIcon(status)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-medium text-sm truncate ${isActive ? 'text-blue-900' : 'text-slate-900'}`}>
+                      {section.title}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {section.category && (
+                        <span className={`px-1.5 py-0.5 text-xs rounded ${
+                          section.category === 'ELIGIBILITY' ? 'bg-green-100 text-green-700' :
+                          section.category === 'TECHNICAL' || section.category === 'SCOPE' ? 'bg-purple-100 text-purple-700' :
+                          section.category === 'COMMERCIAL' || section.category === 'FINANCIAL' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {section.category}
+                        </span>
+                      )}
+                      {assignees.length > 0 && (
+                        <span className="flex items-center gap-1 text-xs text-slate-500">
+                          <Users className="w-3 h-3" />
+                          {assignees.length}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="mt-4 space-y-2">
+          <button
+            onClick={onSaveDraft}
+            disabled={savingDraft}
+            className={`w-full px-4 py-2.5 font-medium rounded-lg flex items-center justify-center gap-2 transition-all ${
+              draftSaved
+                ? 'bg-green-100 text-green-700 border border-green-300'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            {savingDraft ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : draftSaved ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <FileCheck className="w-4 h-4" />
+            )}
+            {draftSaved ? 'Saved!' : 'Save Draft'}
+          </button>
+
+          <button
+            onClick={onEvaluate}
+            disabled={evaluating}
+            className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 text-white font-medium rounded-lg flex items-center justify-center gap-2"
+          >
+            {evaluating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <BarChart3 className="w-4 h-4" />
+            )}
+            Evaluate Proposal
+          </button>
+
+          {isOwner && (
+            <button
+              onClick={() => setShowValidation(!showValidation)}
+              className={`w-full px-4 py-2.5 font-medium rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                showValidation
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              {showValidation ? 'Hide Validation' : 'Validate Proposal'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Main Editor Area */}
+      <div className="flex-1 min-w-0">
+        {activeSection ? (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <CollaborativeProposalEditor
+              section={activeSection}
+              content={sectionContents[activeSectionId] || ''}
+              onContentChange={handleContentChange}
+              onSave={handleSave}
+              proposalId={savedTenderId}
+              saving={saving}
+              lastSaved={lastSaved[activeSectionId]}
+            />
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-600 font-medium">Select a section to start editing</p>
+            <p className="text-slate-500 text-sm mt-1">
+              Choose a section from the list to begin drafting your proposal
+            </p>
+          </div>
+        )}
+
+        {/* Validation Panel */}
+        {showValidation && isOwner && (
+          <div className="mt-6">
+            <ValidationResultsPanel
+              onSectionClick={(sectionId) => {
+                const section = sections.find(
+                  (s) => (s.section_id || s.id || s.key) === sectionId
+                );
+                if (section) setActiveSection(section);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function PDFTenderAnalysis() {
   const location = useLocation();
@@ -778,149 +1074,35 @@ export default function PDFTenderAnalysis() {
             </div>
           )}
 
-          {/* Proposal Draft Tab */}
-          {activeTab === 'proposal' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Proposal Draft</h2>
-                  <p className="text-slate-600 text-sm">
-                    Edit each section to customize your proposal. Use AI to regenerate sections.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {savedTenderId && (
-                    <button
-                      onClick={handleSaveProposalDraft}
-                      disabled={savingDraft}
-                      className={`px-4 py-2 font-medium rounded-lg flex items-center gap-2 transition-all ${
-                        draftSaved
-                          ? 'bg-green-100 text-green-700 border border-green-300'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
-                    >
-                      {savingDraft ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : draftSaved ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <FileCheck className="w-4 h-4" />
-                      )}
-                      {draftSaved ? 'Saved!' : 'Save Draft'}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleEvaluate}
-                    disabled={evaluating}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 text-white font-medium rounded-lg flex items-center gap-2"
-                  >
-                    {evaluating ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <BarChart3 className="w-4 h-4" />
-                    )}
-                    Evaluate Proposal
-                  </button>
-                </div>
-              </div>
+          {/* Proposal Draft Tab - Collaborative Editor */}
+          {activeTab === 'proposal' && proposalSections.length > 0 && (
+            <CollaborationProvider
+              uploadedTenderId={savedTenderId}
+              tenderType="uploaded"
+            >
+              <CollaborativeProposalTab
+                savedTenderId={savedTenderId}
+                analysis={analysis}
+                proposalSections={proposalSections}
+                setProposalSections={setProposalSections}
+                onEvaluate={handleEvaluate}
+                evaluating={evaluating}
+                onSaveDraft={handleSaveProposalDraft}
+                savingDraft={savingDraft}
+                draftSaved={draftSaved}
+              />
+            </CollaborationProvider>
+          )}
 
-              {proposalSections.map((section) => (
-                <div
-                  key={section.id}
-                  className="bg-white rounded-xl border border-slate-200 overflow-hidden"
-                >
-                  <div
-                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50"
-                    onClick={() => toggleSection(section.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-medium">
-                        {section.order}
-                      </span>
-                      <div>
-                        <h3 className="font-medium text-slate-900">{section.title}</h3>
-                        <p className="text-sm text-slate-500">{section.wordCount} words</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(section.content);
-                        }}
-                        className="p-2 hover:bg-slate-100 rounded-lg"
-                        title="Copy content"
-                      >
-                        <Copy className="w-4 h-4 text-slate-500" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRegenerateSection(section);
-                        }}
-                        disabled={regeneratingSection === section.id}
-                        className="p-2 hover:bg-slate-100 rounded-lg"
-                        title="Regenerate with AI"
-                      >
-                        {regeneratingSection === section.id ? (
-                          <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4 text-slate-500" />
-                        )}
-                      </button>
-                      {expandedSections[section.id] ? (
-                        <ChevronUp className="w-5 h-5 text-slate-400" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-slate-400" />
-                      )}
-                    </div>
-                  </div>
-
-                  {expandedSections[section.id] && (
-                    <div className="border-t border-slate-200 p-4">
-                      {editingSection === section.id ? (
-                        <div>
-                          <textarea
-                            className="w-full h-64 p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                            defaultValue={section.content}
-                            id={`edit-${section.id}`}
-                          />
-                          <div className="flex justify-end gap-2 mt-3">
-                            <button
-                              onClick={() => setEditingSection(null)}
-                              className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => {
-                                const textarea = document.getElementById(`edit-${section.id}`);
-                                handleSectionEdit(section.id, textarea.value);
-                              }}
-                              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            >
-                              Save Changes
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap">
-                            {section.content}
-                          </div>
-                          <button
-                            onClick={() => setEditingSection(section.id)}
-                            className="mt-4 px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                            Edit Section
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+          {/* Proposal Draft Tab - No sections yet */}
+          {activeTab === 'proposal' && proposalSections.length === 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+              <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">No Proposal Sections Generated</h3>
+              <p className="text-slate-600 max-w-md mx-auto">
+                The AI analysis didn't generate proposal sections. This may happen if the tender document
+                couldn't be fully processed. Try re-uploading the PDF or check the Summary tab for available information.
+              </p>
             </div>
           )}
 

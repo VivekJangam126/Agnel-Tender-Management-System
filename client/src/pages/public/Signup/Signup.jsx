@@ -2,6 +2,20 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import useAuth from "../../../hooks/useAuth";
 
+// Specialty options for reviewers
+const REVIEWER_SPECIALTIES = [
+  "Finance",
+  "Civil Engineering",
+  "Legal",
+  "IT & Technology",
+  "Healthcare",
+  "Construction",
+  "Procurement",
+  "Quality Assurance",
+  "Environmental",
+  "Other",
+];
+
 export default function Signup() {
   const navigate = useNavigate();
   const { signup } = useAuth();
@@ -14,6 +28,8 @@ export default function Signup() {
     organizationName: "",
     organizationType: "",
     industry: "",
+    specialty: "",
+    customSpecialty: "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,7 +44,13 @@ export default function Signup() {
         ...formData,
         role: value,
         organizationType:
-          value === "authority" ? "Government/Authority" : "Business/Bidder",
+          value === "authority"
+            ? "Government/Authority"
+            : value === "bidder"
+            ? "Business/Bidder"
+            : "Reviewer/Consultant",
+        specialty: "",
+        customSpecialty: "",
       });
     }
     setError("");
@@ -44,6 +66,19 @@ export default function Signup() {
       setError("Please fill in all required fields");
       return;
     }
+
+    // For reviewer, validate specialty selection
+    if (formData.role === "reviewer" && !formData.specialty) {
+      setError("Please select your specialty");
+      return;
+    }
+
+    // If specialty is "Other", require custom specialty
+    if (formData.role === "reviewer" && formData.specialty === "Other" && !formData.customSpecialty) {
+      setError("Please enter your specialty");
+      return;
+    }
+
     setStep(2);
   };
 
@@ -52,23 +87,33 @@ export default function Signup() {
     setError("");
     setIsLoading(true);
 
-    if (!formData.organizationName) {
+    // For reviewer, organization name is optional
+    if (formData.role !== "reviewer" && !formData.organizationName) {
       setError("Organization name is required");
       setIsLoading(false);
       return;
     }
 
     try {
+      // Determine final specialty value
+      const finalSpecialty = formData.specialty === "Other"
+        ? formData.customSpecialty
+        : formData.specialty;
+
       const user = await signup({
         name: formData.fullName,
         email: formData.email,
         password: formData.password,
         role: formData.role.toUpperCase(),
-        organizationName: formData.organizationName,
+        organizationName: formData.organizationName || undefined,
+        specialty: formData.role === "reviewer" ? finalSpecialty : undefined,
       });
 
+      // Redirect based on role
       if (user.role === "authority") {
         navigate("/admin/dashboard");
+      } else if (user.role === "reviewer") {
+        navigate("/reviewer/dashboard");
       } else {
         navigate("/bidder/dashboard");
       }
@@ -145,7 +190,7 @@ export default function Signup() {
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
                     I am a <span className="text-red-500">*</span>
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() =>
@@ -153,7 +198,7 @@ export default function Signup() {
                           target: { name: "role", value: "authority" },
                         })
                       }
-                      className={`px-4 py-3 rounded-lg border-2 transition-all ${
+                      className={`px-3 py-3 rounded-lg border-2 transition-all text-sm ${
                         formData.role === "authority"
                           ? "border-primary-500 bg-primary-50 text-primary-700"
                           : "border-neutral-300 bg-white/50 text-neutral-700 hover:border-primary-300"
@@ -168,7 +213,7 @@ export default function Signup() {
                           target: { name: "role", value: "bidder" },
                         })
                       }
-                      className={`px-4 py-3 rounded-lg border-2 transition-all ${
+                      className={`px-3 py-3 rounded-lg border-2 transition-all text-sm ${
                         formData.role === "bidder"
                           ? "border-primary-500 bg-primary-50 text-primary-700"
                           : "border-neutral-300 bg-white/50 text-neutral-700 hover:border-primary-300"
@@ -176,11 +221,64 @@ export default function Signup() {
                     >
                       Bidder
                     </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleChange({
+                          target: { name: "role", value: "reviewer" },
+                        })
+                      }
+                      className={`px-3 py-3 rounded-lg border-2 transition-all text-sm ${
+                        formData.role === "reviewer"
+                          ? "border-purple-500 bg-purple-50 text-purple-700"
+                          : "border-neutral-300 bg-white/50 text-neutral-700 hover:border-purple-300"
+                      }`}
+                    >
+                      Reviewer
+                    </button>
                   </div>
                   <p className="text-xs text-neutral-500 mt-2">
                     This cannot be changed later
                   </p>
                 </div>
+
+                {/* Specialty selection for Reviewer */}
+                {formData.role === "reviewer" && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Your Specialty <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="specialty"
+                      value={formData.specialty}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-neutral-300 rounded-lg text-neutral-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    >
+                      <option value="">Select your specialty</option>
+                      {REVIEWER_SPECIALTIES.map((spec) => (
+                        <option key={spec} value={spec}>
+                          {spec}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Custom specialty input if "Other" selected */}
+                    {formData.specialty === "Other" && (
+                      <input
+                        name="customSpecialty"
+                        type="text"
+                        value={formData.customSpecialty}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-neutral-300 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        placeholder="Enter your specialty"
+                      />
+                    )}
+
+                    <p className="text-xs text-purple-600 bg-purple-50 p-2 rounded">
+                      As a reviewer, you'll be able to comment on and review proposal sections assigned to you by bidders.
+                    </p>
+                  </div>
+                )}
 
                 {error && (
                   <div className="p-3 bg-red-50/80 backdrop-blur-sm border border-red-200 rounded-lg">
@@ -200,22 +298,22 @@ export default function Signup() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Organization Name
+                    {formData.role === "reviewer" ? "Organization Name (Optional)" : "Organization Name"}
                   </label>
                   <input
                     name="organizationName"
                     type="text"
-                    required
+                    required={formData.role !== "reviewer"}
                     value={formData.organizationName}
                     onChange={handleChange}
                     className="w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-neutral-300 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                    placeholder="Your organization"
+                    placeholder={formData.role === "reviewer" ? "Your company (optional)" : "Your organization"}
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Organization Type
+                    Account Type
                   </label>
                   <input
                     name="organizationType"
@@ -226,19 +324,32 @@ export default function Signup() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Industry / Domain
-                  </label>
-                  <input
-                    name="industry"
-                    type="text"
-                    value={formData.industry}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-neutral-300 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                    placeholder="e.g., Construction, IT, Healthcare"
-                  />
-                </div>
+                {formData.role !== "reviewer" && (
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">
+                      Industry / Domain
+                    </label>
+                    <input
+                      name="industry"
+                      type="text"
+                      value={formData.industry}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-neutral-300 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                      placeholder="e.g., Construction, IT, Healthcare"
+                    />
+                  </div>
+                )}
+
+                {formData.role === "reviewer" && (
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <p className="text-sm text-purple-800 font-medium mb-1">
+                      Specialty: {formData.specialty === "Other" ? formData.customSpecialty : formData.specialty}
+                    </p>
+                    <p className="text-xs text-purple-600">
+                      Bidders will be able to find and assign you to review proposal sections based on your specialty.
+                    </p>
+                  </div>
+                )}
 
                 {error && (
                   <div className="p-3 bg-red-50/80 backdrop-blur-sm border border-red-200 rounded-lg">
