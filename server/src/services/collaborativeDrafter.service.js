@@ -164,6 +164,14 @@ export const CollaborativeDrafterService = {
     const analysisData = data.analysis_data || {};
     const parsedData = data.parsed_data || {};
 
+    // Check for required summary and parsed data
+    if (!analysisData.summary || Object.keys(analysisData.summary).length === 0) {
+      throw new Error('Tender summary data is missing. Please ensure the tender was analyzed successfully.');
+    }
+    if (!parsedData || Object.keys(parsedData).length === 0) {
+      throw new Error('Parsed tender data is missing. Please re-upload or re-analyze the tender.');
+    }
+
     // Build comprehensive tender context
     const tenderContext = {
       tenderId: data.uploaded_tender_id,
