@@ -2,44 +2,21 @@ import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import { ChunkingService } from './chunking.service.js';
 import { EmbeddingService } from './embedding.service.js';
+import { RAGOrchestrator } from '../utils/ragOrchestrator.js';
+import { LLMCaller } from '../utils/llmCaller.js';
+import { TokenCounter } from '../utils/tokenCounter.js';
+import { ContextCompressor } from '../utils/contextCompressor.js';
 
 const CHAT_MODEL = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-const MAX_CONTEXT_CHUNKS = 5;
 
+// DEPRECATED: Use LLMCaller instead
 async function callChatCompletion(prompt, systemPrompt = 'You are a tender assistant. Use ONLY the provided context. If the answer is not in the context, say you do not know.') {
-  if (!env.GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY is not configured');
-  }
-
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: CHAT_MODEL,
-      temperature: parseFloat(env.AI_TEMPERATURE || '0'),
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    }),
+  return LLMCaller.call({
+    systemPrompt,
+    userPrompt: prompt,
+    model: CHAT_MODEL,
+    temperature: parseFloat(env.AI_TEMPERATURE || '0'),
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`LLM API failed: ${response.status} ${response.statusText} - ${errorBody}`);
-  }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content?.trim() || '';
 }
 
 /**
@@ -199,6 +176,7 @@ export const AIService = {
 
   /**
    * Answer a user question using RAG over tender content.
+   * UPDATED: Uses RAGOrchestrator with strict limits and compression
    */
   async queryTenderAI(tenderId, question) {
     if (!question || !question.trim()) {
@@ -219,30 +197,38 @@ export const AIService = {
       throw new Error('Tender must be published to query AI');
     }
 
-    // Embed the question
-    const questionEmbedding = await EmbeddingService.embed(question);
+    console.log(`[AI Query] Tender: ${tenderId}, Question: ${question.substring(0, 100)}...`);
 
-    // Vector similarity search for top chunks
-    const contextRes = await pool.query(
-      `SELECT content
-       FROM tender_content_chunk
-       WHERE tender_id = $1
-       ORDER BY embedding <-> $2::vector
-       LIMIT $3`,
-      [tenderId, questionEmbedding, MAX_CONTEXT_CHUNKS]
-    );
+    // Use RAG Orchestrator for retrieval and compression
+    const ragResult = await RAGOrchestrator.retrieve({
+      query: question,
+      sessionId: tenderId,
+      analysisType: 'general',
+      modelName: CHAT_MODEL,
+    });
 
-    const contexts = contextRes.rows.map((row) => row.content).filter(Boolean);
-
-    if (!contexts.length) {
-      return "I don't have enough information from the tender content to answer that.";
+    if (!ragResult.context || ragResult.stats.compressed.total === 0) {
+      return "I don't have enough information from the tender content to answer that question.";
     }
 
-    const prompt = `CONTEXT:\n${contexts.join('\n\n---\n\n')}\n\nUSER QUESTION:\n${question}`;
+    const systemPrompt = `You are a tender analysis assistant. Use ONLY the provided context to answer questions.
 
-    const answer = await callChatCompletion(prompt);
+RULES:
+- If the answer is not in the context, say: "Not specified in the tender document."
+- Do not hallucinate or make assumptions
+- Be precise and cite specific requirements when available`;
 
-    return answer || "I don't have enough information from the tender content to answer that.";
+    const userPrompt = `CONTEXT:\n${ragResult.context}\n\nQUESTION:\n${question}\n\nANSWER:`;
+
+    const answer = await LLMCaller.call({
+      systemPrompt,
+      userPrompt,
+      model: CHAT_MODEL,
+      temperature: 0,
+      maxTokens: 1000,
+    });
+
+    return answer || "I don't have enough information from the tender content to answer that question.";
   },
 
   /**
@@ -299,6 +285,7 @@ export const AIService = {
   /**
    * AI Drafting Assistance: Review existing content and suggest improvements (no auto-apply)
    * Uses RAG to retrieve similar sections from published tenders as reference
+   * UPDATED: Token-safe with strict retrieval limits
    * @param {Object} options - Configuration
    * @param {string} options.mode - "section" or "tender"
    * @param {string} options.sectionType - Section key (for section mode)
@@ -314,32 +301,27 @@ export const AIService = {
       throw new Error('User question is required');
     }
 
+    console.log(`[Drafting Assist] Section: ${sectionType}, Question: ${userQuestion.substring(0, 100)}...`);
+
     // RAG: Retrieve similar published tender sections for reference
+    // STRICT LIMITS: Max 3 reference chunks
     let referenceContext = '';
     try {
-      const referenceEmbedding = await EmbeddingService.embed(userQuestion);
-      
-      // Search for similar published sections
-      const referenceRes = await pool.query(
-        `SELECT ts.content, t.sector, t.tender_type
-         FROM tender_content_chunk tcc
-         JOIN tender_section ts ON tcc.section_id = ts.section_id
-         JOIN tender t ON tcc.tender_id = t.tender_id
-         WHERE t.status = 'PUBLISHED'
-         ORDER BY tcc.embedding <-> $1::vector
-         LIMIT 3`,
-        [referenceEmbedding]
-      );
+      const ragResult = await RAGOrchestrator.retrieve({
+        query: userQuestion,
+        sessionId: null, // No session, only global search
+        analysisType: sectionType?.toLowerCase() || 'general',
+        modelName: CHAT_MODEL,
+      });
 
-      if (referenceRes.rows.length > 0) {
-        referenceContext = '\n\nREFERENCE EXAMPLES from published tenders:\n';
-        referenceRes.rows.forEach((row, idx) => {
-          referenceContext += `\nExample ${idx + 1} (${row.tender_type || 'General'} - ${row.sector || 'N/A'}):\n${row.content?.substring(0, 300)}...\n`;
-        });
+      if (ragResult.globalContext) {
+        referenceContext = '\n\nREFERENCE EXAMPLES from published tenders:\n' + ragResult.globalContext;
       }
+
+      console.log(`[Drafting Assist] Retrieved ${ragResult.stats.compressed.global} reference chunks`);
     } catch (err) {
       // If embedding fails, continue without RAG context
-      console.warn('RAG embedding failed, proceeding without reference context:', err.message);
+      console.warn('[Drafting Assist] RAG retrieval failed, proceeding without reference context:', err.message);
     }
 
     // Build section-specific guidance
@@ -436,19 +418,20 @@ YOUR CORE RESPONSIBILITIES:
 6. NEVER add clauses that conflict with existing content
 7. Make suggestions audit-friendly, defensible, and government-compliant
 
-CRITICAL OUTPUT RULES:
+RULES:
+- Use ONLY the provided context and reference examples
 - Provide DELTA-ONLY suggestions (small, insertable text blocks)
 - Each suggestion should address ONE specific gap
 - Suggestions should be concrete and measurable
 - Keep suggested text brief (1-3 sentences maximum)
-- Always explain WHY the suggestion matters for government compliance
+- If information is not in context, say "Not specified in reference tenders"
 
 For each suggestion, provide exactly:
 - observation: What is missing or could be improved (specific, not vague)
 - suggestedText: The exact text to ADD (not replace) - keep it concise
 - reason: Why this is important for government compliance/clarity
 
-OUTPUT FORMAT RULES:
+OUTPUT FORMAT:
 - Provide 2-3 targeted suggestions ONLY if there are gaps
 - Format each suggestion exactly as: SUGGESTION [number]: Observation: ... Text: ... Reason: ...
 - If content is adequate, respond with: "No improvements needed for this request."
@@ -459,7 +442,7 @@ ${getSectionGuidance(sectionType)}
 ${sectionType ? `SECTION TYPE: ${sectionType}` : ''}
 
 CURRENT CONTENT TO REVIEW:
-${existingContent || '(empty)'}
+${existingContent?.substring(0, 2000) || '(empty)'}
 
 USER QUESTION/REQUEST:
 ${userQuestion}
@@ -473,8 +456,16 @@ Reason: [why it matters]
 
 If content is adequate, respond with: "No improvements needed for this request."`;
 
+    console.log(`[Drafting Assist] Estimated prompt tokens: ${TokenCounter.estimate(systemPrompt + userPrompt)}`);
+
     try {
-      const response = await callChatCompletion(systemPrompt + '\n\n' + userPrompt);
+      const response = await LLMCaller.call({
+        systemPrompt,
+        userPrompt,
+        model: CHAT_MODEL,
+        temperature: 0.2,
+        maxTokens: 1500,
+      });
 
       // Parse AI response into structured suggestions
       const suggestions = parseAISuggestions(response);
@@ -482,7 +473,7 @@ If content is adequate, respond with: "No improvements needed for this request."
       return suggestions;
     } catch (err) {
       // Fallback to mock suggestions if API fails
-      console.warn('AI API failed, using mock suggestions:', err.message);
+      console.warn('[Drafting Assist] AI API failed, using mock suggestions:', err.message);
       const mockSuggestions = generateMockSuggestion(sectionType, userQuestion);
       return mockSuggestions;
     }
@@ -491,47 +482,56 @@ If content is adequate, respond with: "No improvements needed for this request."
   /**
    * Analyze a proposal section response against tender requirement
    * Returns advisory guidance (no auto-write, no auto-apply)
+   * UPDATED: Token-safe with RAG support
    * ALWAYS returns HTTP 200 with fallback on any error
    */
   async analyzeProposalSection(sectionType, draftContent, tenderRequirement = '', userQuestion = '') {
     try {
+      console.log(`[Proposal Analysis] Section: ${sectionType}, Question: ${userQuestion.substring(0, 100)}...`);
+
       // If no API key, use fallback immediately
-      if (!env.GROQ_API_KEY) {
-        console.log('[AI Service] No API key - using fallback guidance');
+      if (!env.GROQ_API_KEY && !env.GEMINI_API_KEY && !env.HUGGINGFACE_API_KEY && !env.OPENAI_API_KEY) {
+        console.log('[Proposal Analysis] No API key - using fallback guidance');
         return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
       }
 
-      // Set timeout for AI call (10 seconds max)
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('AI request timeout')), 10000);
-      });
+      const systemPrompt = `You are a tender proposal assistant. Analyze this bidder's draft response against tender requirements.
 
-      const prompt = `You are a tender proposal assistant. Analyze this bidder's draft response.
+RULES:
+- Provide 1-3 specific improvement suggestions
+- Focus on: Completeness, clarity, compliance, risk mitigation
+- If draft is comprehensive, say "No improvements needed"
+- Keep suggestions actionable and brief`;
 
-Section Type: ${sectionType}
-Tender Requirement: ${tenderRequirement || '(No specific requirement provided)'}
-Bidder's Draft: ${draftContent || '(Empty draft)'}
+      const userPrompt = `Section Type: ${sectionType}
+Tender Requirement: ${tenderRequirement?.substring(0, 500) || '(No specific requirement provided)'}
+Bidder's Draft: ${draftContent?.substring(0, 1500) || '(Empty draft)'}
 User Question: ${userQuestion || 'General analysis'}
 
 Provide 1-3 specific improvement suggestions in this EXACT format:
 
 SUGGESTION 1:
 observation: [What's missing or could be improved]
-suggestedImprovement: [Specific actionable improvement - do NOT write full paragraphs, keep it brief]
+suggestedImprovement: [Specific actionable improvement - keep it brief]
 reason: [Why this matters for government tender evaluation]
 
 SUGGESTION 2:
 ...
 
-Focus on: Completeness, clarity, compliance, risk mitigation, alignment with government tender standards.
 If the draft is comprehensive and well-structured, say "No improvements needed."`;
 
-      // Race between AI call and timeout
-      const aiPromise = callChatCompletion(prompt);
-      const response = await Promise.race([aiPromise, timeoutPromise]);
+      console.log(`[Proposal Analysis] Estimated prompt tokens: ${TokenCounter.estimate(systemPrompt + userPrompt)}`);
+
+      const response = await LLMCaller.call({
+        systemPrompt,
+        userPrompt,
+        model: CHAT_MODEL,
+        temperature: 0.2,
+        maxTokens: 1000,
+      });
 
       if (!response || response.trim().length === 0) {
-        console.log('[AI Service] Empty AI response - using fallback');
+        console.log('[Proposal Analysis] Empty AI response - using fallback');
         return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
       }
 
@@ -539,7 +539,7 @@ If the draft is comprehensive and well-structured, say "No improvements needed."
       const parsed = parseAIResponseToSuggestions(response, sectionType);
       
       if (!parsed || parsed.suggestions.length === 0) {
-        console.log('[AI Service] Failed to parse AI response - using fallback');
+        console.log('[Proposal Analysis] Failed to parse AI response - using fallback');
         return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
       }
 
@@ -549,7 +549,7 @@ If the draft is comprehensive and well-structured, say "No improvements needed."
       };
 
     } catch (err) {
-      console.error('[AI Service] Error during analysis:', err.message);
+      console.error('[Proposal Analysis] Error during analysis:', err.message);
       // Graceful fallback for any error - NEVER throw to frontend
       return generateFallbackSectionGuidance(sectionType, draftContent, tenderRequirement);
     }

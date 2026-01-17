@@ -48,4 +48,17 @@ router.post('/evaluate', PDFAnalysisController.evaluateProposal);
  */
 router.post('/regenerate-section', PDFAnalysisController.regenerateSection);
 
+/**
+ * POST /api/pdf/export
+ * Export proposal as professional PDF document
+ * Body: { proposalSections, tenderInfo, companyInfo, template }
+ */
+router.post('/export', PDFAnalysisController.exportProposalPDF);
+
+/**
+ * GET /api/pdf/templates
+ * Get available export templates
+ */
+router.get('/templates', PDFAnalysisController.getExportTemplates);
+
 export default router;

@@ -31,6 +31,8 @@ import BidderHistory from "./pages/bidder/BidderHistory";
 import SavedTendersPage from "./pages/bidder/SavedTendersPage";
 import BidderProfile from "./pages/bidder/BidderProfile";
 import PDFTenderAnalysis from "./pages/bidder/PDFTenderAnalysis";
+import UploadedTenderAnalysis from "./pages/bidder/UploadedTenderAnalysis";
+import CollaborativeProposalWorkspace from "./pages/bidder/CollaborativeProposalWorkspace";
 import TenderCreate from "./pages/admin/TenderCreate/TenderCreate";
 import Analytics from "./pages/admin/Analytics/Analytics";
 import Profile from "./pages/admin/Profile/Profile";
@@ -95,6 +97,9 @@ export default function App() {
             <Route path="/bidder/saved-tenders" element={<SavedTendersPage />} />
             <Route path="/bidder/profile" element={<BidderProfile />} />
             <Route path="/bidder/pdf-analyze" element={<PDFTenderAnalysis />} />
+            <Route path="/bidder/uploaded-tenders/:id/analyze" element={<UploadedTenderAnalysis />} />
+            <Route path="/bidder/proposal/:tenderId/collaborate" element={<CollaborativeProposalWorkspace />} />
+            <Route path="/bidder/uploaded-tenders/:uploadedTenderId/collaborate" element={<CollaborativeProposalWorkspace />} />
           </Route>
 
           {/* Fallback */}

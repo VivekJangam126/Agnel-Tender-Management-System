@@ -11,6 +11,7 @@ import {
   Clock,
   LogOut,
   Building2,
+  ClipboardList,
 } from "lucide-react";
 
 const adminMenu = [
@@ -34,6 +35,12 @@ const bidderMenu = [
   
 ];
 
+const reviewerMenu = [
+  { label: "Dashboard", href: "/reviewer/dashboard", icon: LayoutDashboard, rootPath: "/reviewer/dashboard" },
+  { label: "My Assignments", href: "/reviewer/assignments", icon: ClipboardList, rootPath: "/reviewer/assignments" },
+  { label: "Profile", href: "/reviewer/profile", icon: Settings, rootPath: "/reviewer/profile" },
+];
+
 /**
  * Check if a route is active.
  * For nested routes like /admin/tender/edit/123, check against rootPath (/admin/tender)
@@ -48,17 +55,23 @@ function isRouteActive(currentPath, menuItem) {
 export default function Sidebar({ role = "admin" }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const menu = role === "admin" ? adminMenu : bidderMenu;
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  // Select menu based on role
+  const menu = role === "admin"
+    ? adminMenu
+    : role === "reviewer"
+    ? reviewerMenu
+    : bidderMenu;
+
+  const user = JSON.parse(localStorage.getItem("tms_user") || "{}");
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
+    localStorage.removeItem("tms_user");
+    localStorage.removeItem("tms_token");
     navigate("/login");
   };
 
-  const roleLabel = role === "admin" ? "Authority" : "Bidder";
+  const roleLabel = role === "admin" ? "Authority" : role === "reviewer" ? "Reviewer" : "Bidder";
 
   return (
     <aside className="w-64 h-screen bg-white border-r border-neutral-200 flex flex-col fixed top-0 left-0 overflow-y-auto shadow-sm">

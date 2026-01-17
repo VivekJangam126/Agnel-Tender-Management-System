@@ -6,6 +6,9 @@ import { ProposalPublishService } from '../services/proposal-publish.service.js'
 import { AIService } from '../services/ai.service.js';
 import { TenderSummarizerService } from '../services/tenderSummarizer.service.js';
 import { ProposalDrafterService } from '../services/proposalDrafter.service.js';
+import { UploadedTenderService } from '../services/uploadedTender.service.js';
+import { SavedTenderService } from '../services/savedTender.service.js';
+import { UploadedProposalDraftService } from '../services/uploadedProposalDraft.service.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
 import { aiRateLimiter } from '../middlewares/rate-limit.middleware.js';
@@ -20,9 +23,13 @@ const router = Router();
 /**
  * GET /api/bidder/tenders
  * List published tenders for bidder with real statistics
+ * Now includes uploaded tenders mixed with platform tenders
  */
 router.get('/tenders', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
+    const { search = '', sector = '' } = req.query;
+
+    // Get platform tenders
     const tenders = await TenderService.listTenders(req.user, { status: 'PUBLISHED' });
 
     // Get proposal counts for all tenders in one query
@@ -42,7 +49,7 @@ router.get('/tenders', requireAuth, requireRole('BIDDER'), async (req, res, next
       });
     }
 
-    // Transform with real statistics
+    // Transform platform tenders with real statistics
     const transformedTenders = tenders.map(t => {
       const daysRemaining = t.submission_deadline
         ? Math.max(0, Math.ceil((new Date(t.submission_deadline) - new Date()) / (1000 * 60 * 60 * 24)))
@@ -64,22 +71,49 @@ router.get('/tenders', requireAuth, requireRole('BIDDER'), async (req, res, next
           industryDomain: t.sector || 'General'
         },
         createdAt: t.created_at,
-        // Real proposal count
-        proposalCount: proposalCounts[t.tender_id] || 0
+        proposalCount: proposalCounts[t.tender_id] || 0,
+        // Mark as platform tender
+        isUploaded: false,
+        source: 'PLATFORM'
       };
     });
 
-    // Calculate aggregate statistics for the discovery page
-    const totalValue = tenders.reduce((sum, t) => sum + (parseFloat(t.estimated_value) || 0), 0);
+    // Get uploaded tenders and merge with platform tenders
+    let uploadedTenders = [];
+    try {
+      uploadedTenders = await UploadedTenderService.listForDiscovery({
+        search,
+        sector,
+        limit: 100
+      });
+    } catch (uploadErr) {
+      console.error('[Bidder Tenders] Failed to fetch uploaded tenders:', uploadErr.message);
+      // Continue without uploaded tenders if query fails
+    }
+
+    // Merge platform and uploaded tenders
+    const allTenders = [...transformedTenders, ...uploadedTenders];
+
+    // Sort by creation date (newest first)
+    allTenders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Calculate aggregate statistics including uploaded tenders
+    const platformValue = tenders.reduce((sum, t) => sum + (parseFloat(t.estimated_value) || 0), 0);
+    const uploadedValue = uploadedTenders.reduce((sum, t) => sum + (t.estimatedValue || 0), 0);
+    const totalValue = platformValue + uploadedValue;
+
     const avgCompetition = transformedTenders.length > 0
       ? Math.round(transformedTenders.reduce((sum, t) => sum + t.proposalCount, 0) / transformedTenders.length)
       : 0;
-    const closingSoon = transformedTenders.filter(t => t.daysRemaining <= 14).length;
+
+    const closingSoon = allTenders.filter(t => t.daysRemaining <= 14).length;
 
     res.json({
-      tenders: transformedTenders,
+      tenders: allTenders,
       statistics: {
-        totalTenders: transformedTenders.length,
+        totalTenders: allTenders.length,
+        platformTenders: transformedTenders.length,
+        uploadedTenders: uploadedTenders.length,
         totalValue,
         avgCompetition,
         closingSoon
@@ -1214,6 +1248,397 @@ router.get('/proposals/:id/versions/:versionNumber', requireAuth, requireRole('B
     if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
     if (err.message === 'Version not found') return res.status(404).json({ error: err.message });
     if (err.message === 'Forbidden') return res.status(403).json({ error: err.message });
+    next(err);
+  }
+});
+
+// ==========================================
+// UPLOADED TENDER ENDPOINTS
+// ==========================================
+
+/**
+ * GET /api/bidder/uploaded-tenders/:id
+ * Get uploaded tender details with full analysis data
+ */
+router.get('/uploaded-tenders/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const tender = await UploadedTenderService.getById(id, req.user.userId);
+
+    if (!tender) {
+      return res.status(404).json({ error: 'Uploaded tender not found' });
+    }
+
+    res.json({
+      success: true,
+      data: tender
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/uploaded-tenders
+ * List uploaded tenders for the current user's organization
+ */
+router.get('/uploaded-tenders', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+
+    const tenders = await UploadedTenderService.listByOrganization(
+      req.user.organizationId,
+      { limit: parseInt(limit), offset: parseInt(offset) }
+    );
+
+    const count = await UploadedTenderService.getCount({
+      organizationId: req.user.organizationId
+    });
+
+    res.json({
+      success: true,
+      data: tenders,
+      pagination: {
+        total: count,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/bidder/uploaded-tenders/:id
+ * Delete an uploaded tender
+ */
+router.delete('/uploaded-tenders/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const deleted = await UploadedTenderService.delete(id, req.user.userId);
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Uploaded tender not found or unauthorized' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Uploaded tender deleted successfully'
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==========================================
+// SAVED TENDER ENDPOINTS
+// ==========================================
+
+/**
+ * GET /api/bidder/saved-tenders
+ * Get all saved tenders for the current user
+ */
+router.get('/saved-tenders', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+
+    const tenders = await SavedTenderService.getSavedTenders(
+      req.user.userId,
+      { limit: parseInt(limit), offset: parseInt(offset) }
+    );
+
+    const count = await SavedTenderService.getCount(req.user.userId);
+
+    res.json({
+      success: true,
+      data: tenders,
+      pagination: {
+        total: count,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/saved-tenders/ids
+ * Get IDs of all saved tenders (for quick lookup in tender lists)
+ */
+router.get('/saved-tenders/ids', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const savedIds = await SavedTenderService.getSavedIds(req.user.userId);
+
+    res.json({
+      success: true,
+      data: savedIds
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/saved-tenders
+ * Save a tender (platform or uploaded)
+ * Body: { tenderId?: string, uploadedTenderId?: string }
+ */
+router.post('/saved-tenders', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { tenderId, uploadedTenderId } = req.body;
+
+    const saved = await SavedTenderService.saveTender(
+      { tenderId, uploadedTenderId },
+      req.user.userId,
+      req.user.organizationId
+    );
+
+    res.status(201).json({
+      success: true,
+      data: saved,
+      message: 'Tender saved successfully'
+    });
+  } catch (err) {
+    if (err.message === 'Tender is already saved') {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/saved-tenders/toggle
+ * Toggle save status of a tender
+ * Body: { tenderId?: string, uploadedTenderId?: string }
+ */
+router.post('/saved-tenders/toggle', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { tenderId, uploadedTenderId } = req.body;
+
+    const result = await SavedTenderService.toggleSave(
+      { tenderId, uploadedTenderId },
+      req.user.userId,
+      req.user.organizationId
+    );
+
+    res.json({
+      success: true,
+      data: result,
+      message: result.saved ? 'Tender saved' : 'Tender unsaved'
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/bidder/saved-tenders
+ * Unsave a tender
+ * Body: { tenderId?: string, uploadedTenderId?: string }
+ */
+router.delete('/saved-tenders', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { tenderId, uploadedTenderId } = req.body;
+
+    const deleted = await SavedTenderService.unsaveTender(
+      { tenderId, uploadedTenderId },
+      req.user.userId
+    );
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Saved tender not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Tender unsaved successfully'
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==========================================
+// UPLOADED PROPOSAL DRAFT ENDPOINTS
+// ==========================================
+
+/**
+ * GET /api/bidder/uploaded-proposal-drafts
+ * List all proposal drafts for uploaded tenders
+ */
+router.get('/uploaded-proposal-drafts', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { limit = 50, offset = 0, status } = req.query;
+
+    const drafts = await UploadedProposalDraftService.listByUser(
+      req.user.userId,
+      { limit: parseInt(limit), offset: parseInt(offset), status }
+    );
+
+    const count = await UploadedProposalDraftService.getCount(req.user.userId, { status });
+
+    res.json({
+      success: true,
+      data: drafts,
+      pagination: {
+        total: count,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/uploaded-proposal-drafts/:id
+ * Get a specific proposal draft by ID
+ */
+router.get('/uploaded-proposal-drafts/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const draft = await UploadedProposalDraftService.getById(id, req.user.userId);
+
+    if (!draft) {
+      return res.status(404).json({ error: 'Draft not found' });
+    }
+
+    res.json({
+      success: true,
+      data: draft
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/uploaded-proposal-drafts/tender/:uploadedTenderId
+ * Get proposal draft by uploaded tender ID
+ */
+router.get('/uploaded-proposal-drafts/tender/:uploadedTenderId', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { uploadedTenderId } = req.params;
+    const draft = await UploadedProposalDraftService.getByUploadedTenderId(
+      uploadedTenderId,
+      req.user.userId
+    );
+
+    if (!draft) {
+      return res.status(404).json({ error: 'Draft not found' });
+    }
+
+    res.json({
+      success: true,
+      data: draft
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/uploaded-proposal-drafts
+ * Create or update a proposal draft
+ * Body: { uploadedTenderId, sections, title? }
+ */
+router.post('/uploaded-proposal-drafts', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { uploadedTenderId, sections, title } = req.body;
+
+    if (!uploadedTenderId) {
+      return res.status(400).json({ error: 'uploadedTenderId is required' });
+    }
+
+    const draft = await UploadedProposalDraftService.upsert(
+      { uploadedTenderId, sections, title },
+      req.user.userId,
+      req.user.organizationId
+    );
+
+    res.status(201).json({
+      success: true,
+      data: draft,
+      message: 'Draft saved successfully'
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/bidder/uploaded-proposal-drafts/:id/status
+ * Update draft status
+ * Body: { status }
+ */
+router.put('/uploaded-proposal-drafts/:id/status', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['DRAFT', 'FINAL', 'EXPORTED'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const draft = await UploadedProposalDraftService.updateStatus(id, status, req.user.userId);
+
+    res.json({
+      success: true,
+      data: draft,
+      message: 'Status updated successfully'
+    });
+  } catch (err) {
+    if (err.message === 'Draft not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/bidder/uploaded-proposal-drafts/:id/export
+ * Record an export of the draft
+ */
+router.post('/uploaded-proposal-drafts/:id/export', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const draft = await UploadedProposalDraftService.recordExport(id, req.user.userId);
+
+    res.json({
+      success: true,
+      data: draft,
+      message: 'Export recorded'
+    });
+  } catch (err) {
+    if (err.message === 'Draft not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/bidder/uploaded-proposal-drafts/:id
+ * Delete a proposal draft
+ */
+router.delete('/uploaded-proposal-drafts/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const deleted = await UploadedProposalDraftService.delete(id, req.user.userId);
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Draft not found or unauthorized' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Draft deleted successfully'
+    });
+  } catch (err) {
     next(err);
   }
 });
