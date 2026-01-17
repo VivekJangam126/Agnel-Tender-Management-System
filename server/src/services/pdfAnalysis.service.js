@@ -2,7 +2,11 @@
  * PDF Analysis Service
  * Comprehensive AI-powered analysis of uploaded tender PDFs
  * Provides: Summary, Proposal Draft, and Evaluation
- * 
+ *
+ * TWO-STAGE AI PIPELINE:
+ * - STAGE 1 (Groq): RAG-based fact extraction → Strict JSON output (internal)
+ * - STAGE 2 (Gemini): Format JSON → Clean, UI-ready text
+ *
  * UPDATED: Section-wise RAG with token limits and context compression
  * UPDATED: Section normalization for bidder-friendly UI
  */
@@ -13,6 +17,7 @@ import { LLMCaller } from '../utils/llmCaller.js';
 import { RAGOrchestrator } from '../utils/ragOrchestrator.js';
 import { TokenCounter } from '../utils/tokenCounter.js';
 import { SectionNormalizationService } from './sectionNormalization.service.js';
+import AIPostProcessor from './ai/postProcessor.js';
 
 const GROQ_MODEL = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
@@ -76,13 +81,17 @@ export const PDFAnalysisService = {
     // Step 2: Normalize sections into bidder-friendly high-level sections
     let normalizedSections;
     try {
+      console.log('[PDF Analysis] Starting section normalization...');
       normalizedSections = await SectionNormalizationService.normalizeSections(
         parsed.sections,
         sessionId
       );
+      console.log(`[PDF Analysis] normalizedSections result: ${normalizedSections?.length || 0} sections`);
+      console.log('[PDF Analysis] normalizedSections sample:', JSON.stringify(normalizedSections?.[0] || 'empty', null, 2));
     } catch (err) {
       console.error('Section normalization failed:', err.message);
       normalizedSections = this._getFallbackNormalizedSections(parsed.sections);
+      console.log(`[PDF Analysis] Using fallback normalizedSections: ${normalizedSections?.length || 0} sections`);
     }
 
     // Step 3: Generate Summary
@@ -103,7 +112,10 @@ export const PDFAnalysisService = {
       proposalDraft = this._generateFallbackProposalDraft(parsed);
     }
 
-    return {
+    console.log('[PDF Analysis] Building final response object...');
+    console.log(`[PDF Analysis] Final normalizedSections count: ${normalizedSections?.length || 0}`);
+
+    const response = {
       success: true,
       analysisId: sessionId,
       analyzedAt: new Date().toISOString(),
@@ -127,89 +139,177 @@ export const PDFAnalysisService = {
       // AI-generated proposal draft
       proposalDraft,
     };
+
+    console.log('[PDF Analysis] Response keys:', Object.keys(response));
+    console.log('[PDF Analysis] Response has normalizedSections:', !!response.normalizedSections);
+
+    return response;
   },
 
   /**
    * Generate comprehensive summary with bullet points
-   * UPDATED: Token-safe with compression
+   *
+   * TWO-STAGE PIPELINE:
+   * Stage 1: Groq extracts facts into strict JSON (internal)
+   * Stage 2: Gemini formats JSON into UI-ready text
    */
   async generateSummary(parsed) {
-    const systemPrompt = `You are an expert government tender analyst. Analyze the tender document and extract key information.
+    // ============================================
+    // STAGE 1: GROQ RAG FACT EXTRACTION
+    // Output: Strict JSON only (internal use)
+    // ============================================
+    const groqSystemPrompt = `You are a fact extraction engine for government tender documents.
 
-Your task is to:
-1. Write a clear executive summary (4-6 sentences)
-2. Extract bullet points for each category
-3. Identify critical requirements, deadlines, and risks
-4. Assess opportunity and provide actionable insights
+YOUR ONLY TASK: Extract factual information from the provided tender content and output STRICT JSON.
 
-RULES:
-- Use ONLY information from the provided context
-- Be specific - extract actual values (amounts, dates, percentages)
-- If information is missing, say "Not specified"
-- Do not hallucinate details`;
+CRITICAL RULES:
+- Output ONLY valid JSON - no prose, no explanations, no formatting
+- Extract ONLY facts present in the provided content
+- Use EXACT values from the document (amounts, dates, percentages)
+- If information is NOT in the document, use null or empty array
+- Do NOT infer, assume, or hallucinate any information
+- Do NOT add context or explanations - just raw data extraction`;
 
     // Prepare content with token limit in mind
     const contentForAnalysis = this._prepareContentForAnalysis(parsed);
-    
+
     // Check token budget
     const budget = TokenCounter.getBudget(GROQ_MODEL, 3000);
-    console.log(`[PDF Summary] Token budget: ${budget.prompt} for prompt`);
+    console.log(`[PDF Summary] Stage 1 (Groq) - Token budget: ${budget.prompt}`);
 
-    const userPrompt = `Analyze this government tender and provide a comprehensive summary:
+    const groqUserPrompt = `EXTRACT FACTS FROM THIS TENDER DOCUMENT:
 
-TENDER DETAILS:
-Title: ${parsed.title}
-Authority: ${parsed.metadata?.authority || 'Not specified'}
-Sector: ${parsed.metadata?.sector || 'Not specified'}
-Estimated Value: ${parsed.metadata?.estimatedValue ? `₹${parsed.metadata.estimatedValue.toLocaleString()}` : 'Not specified'}
-EMD: ${parsed.metadata?.emdAmount ? `₹${parsed.metadata.emdAmount.toLocaleString()}` : 'Not specified'}
-Deadline: ${parsed.metadata?.deadline || 'Not specified'}
-Reference: ${parsed.metadata?.referenceNumber || 'Not specified'}
+TENDER METADATA:
+- Title: ${parsed.title || null}
+- Authority: ${parsed.metadata?.authority || null}
+- Sector: ${parsed.metadata?.sector || null}
+- Estimated Value: ${parsed.metadata?.estimatedValue || null}
+- EMD Amount: ${parsed.metadata?.emdAmount || null}
+- Deadline: ${parsed.metadata?.deadline || null}
+- Reference Number: ${parsed.metadata?.referenceNumber || null}
 
-TENDER CONTENT (Compressed):
+TENDER CONTENT:
 ${contentForAnalysis}
 
-Respond in this exact JSON format:
+OUTPUT STRICT JSON (no other text):
 {
-  "executiveSummary": "4-6 sentence overview of the tender scope, objectives, key deliverables, and requirements",
-  "criticalRequirements": ["requirement 1", "requirement 2", "..."],
-  "eligibilityCriteria": ["criteria 1", "criteria 2", "..."],
-  "technicalSpecifications": ["spec 1", "spec 2", "..."],
-  "financialTerms": ["EMD amount", "payment terms", "price structure", "..."],
-  "complianceRequirements": ["compliance 1", "compliance 2", "..."],
-  "deadlinesAndTimelines": ["deadline 1", "milestone 1", "..."],
-  "documentsRequired": ["document 1", "document 2", "..."],
-  "riskFactors": ["risk 1", "risk 2", "..."],
-  "opportunityScore": 75,
-  "opportunityAssessment": "Assessment of this opportunity for bidders",
-  "actionItems": ["action 1", "action 2", "..."]
+  "executiveSummary": "raw extracted summary text or null",
+  "criticalRequirements": ["extracted requirement 1", "extracted requirement 2"],
+  "eligibilityCriteria": ["extracted criterion 1", "extracted criterion 2"],
+  "technicalSpecifications": ["extracted spec 1", "extracted spec 2"],
+  "financialTerms": ["extracted EMD info", "extracted payment terms"],
+  "complianceRequirements": ["extracted compliance 1"],
+  "deadlinesAndTimelines": ["extracted deadline 1", "extracted milestone 1"],
+  "documentsRequired": ["extracted document 1", "extracted document 2"],
+  "riskFactors": ["extracted risk 1", "extracted penalty 1"],
+  "opportunityScore": 70,
+  "opportunityAssessment": "raw assessment or null",
+  "actionItems": ["recommended action 1", "recommended action 2"]
 }`;
 
-    const response = await callGroq(systemPrompt, userPrompt, { temperature: 0.2, maxTokens: 3000 });
-    const summaryData = parseJSON(response);
+    const groqResponse = await callGroq(groqSystemPrompt, groqUserPrompt, {
+      temperature: 0, // Zero temperature for deterministic extraction
+      maxTokens: 3000,
+    });
 
-    if (!summaryData) {
-      throw new Error('Failed to parse summary response');
+    const groqJson = parseJSON(groqResponse);
+
+    if (!groqJson) {
+      console.error('[PDF Summary] Stage 1 failed - Groq JSON parse error');
+      throw new Error('Failed to extract facts from tender (Stage 1)');
     }
 
+    console.log('[PDF Summary] Stage 1 complete - Groq JSON extracted');
+
+    // ============================================
+    // STAGE 2: GEMINI FORMATTING
+    // Input: Groq JSON
+    // Output: UI-ready formatted text
+    // ============================================
+    console.log('[PDF Summary] Stage 2 (Gemini) - Formatting for UI');
+
+    const formattingResult = await AIPostProcessor.formatAnalysisWithGemini(groqJson);
+
+    if (!formattingResult.success) {
+      console.warn('[PDF Summary] Stage 2 warning - Using fallback formatting');
+    }
+
+    const formatted = formattingResult.formatted;
+
+    // Build final summary object for UI consumption
     return {
       isAI: true,
-      executiveSummary: summaryData.executiveSummary || '',
+      // Use Gemini-formatted executive summary
+      executiveSummary: formatted.executiveSummary || groqJson.executiveSummary || '',
+
+      // Use Gemini-formatted bullet points
       bulletPoints: {
-        criticalRequirements: summaryData.criticalRequirements || [],
-        eligibilityCriteria: summaryData.eligibilityCriteria || [],
-        technicalSpecifications: summaryData.technicalSpecifications || [],
-        financialTerms: summaryData.financialTerms || [],
-        complianceRequirements: summaryData.complianceRequirements || [],
-        deadlinesAndTimelines: summaryData.deadlinesAndTimelines || [],
-        documentsRequired: summaryData.documentsRequired || [],
-        riskFactors: summaryData.riskFactors || [],
+        criticalRequirements: formatted.criticalRequirements || groqJson.criticalRequirements || [],
+        eligibilityCriteria: formatted.eligibilityCriteria || groqJson.eligibilityCriteria || [],
+        technicalSpecifications: formatted.technicalSpecifications || groqJson.technicalSpecifications || [],
+        financialTerms: this._extractFinancialTermsArray(formatted.financialDetails, groqJson.financialTerms),
+        complianceRequirements: groqJson.complianceRequirements || [],
+        deadlinesAndTimelines: formatted.deadlinesTimeline || groqJson.deadlinesAndTimelines || [],
+        documentsRequired: groqJson.documentsRequired || [],
+        riskFactors: this._extractRiskFactorsArray(formatted.riskFactors, groqJson.riskFactors),
       },
-      opportunityScore: summaryData.opportunityScore || 70,
-      opportunityAssessment: summaryData.opportunityAssessment || '',
-      actionItems: summaryData.actionItems || [],
+
+      // Opportunity metrics
+      opportunityScore: formatted.opportunityScore || groqJson.opportunityScore || 70,
+      opportunityAssessment: formatted.opportunityAssessment || groqJson.opportunityAssessment || '',
+
+      // Action items
+      actionItems: formatted.recommendedActions || groqJson.actionItems || [],
+
+      // Section summaries (from parsed data)
       sectionSummaries: this._generateSectionSummaries(parsed.sections),
+
+      // Metadata for debugging/audit
+      _pipelineMetadata: {
+        stage1: 'groq-rag-extraction',
+        stage2: formattingResult.metadata?.formattedBy || 'fallback',
+        validationPassed: formattingResult.metadata?.validationPassed ?? true,
+        timestamp: new Date().toISOString(),
+      },
     };
+  },
+
+  /**
+   * Helper: Extract financial terms as array from formatted object
+   */
+  _extractFinancialTermsArray(financialDetails, fallbackArray) {
+    if (!financialDetails) return fallbackArray || [];
+
+    const terms = [];
+    if (financialDetails.emd && !financialDetails.emd.includes('Not specified')) {
+      terms.push(`EMD: ${financialDetails.emd}`);
+    }
+    if (financialDetails.estimatedValue && !financialDetails.estimatedValue.includes('Not specified')) {
+      terms.push(`Estimated Value: ${financialDetails.estimatedValue}`);
+    }
+    if (financialDetails.paymentTerms && !financialDetails.paymentTerms.includes('Not specified')) {
+      terms.push(`Payment Terms: ${financialDetails.paymentTerms}`);
+    }
+    if (financialDetails.otherCharges && !financialDetails.otherCharges.includes('Not specified')) {
+      terms.push(financialDetails.otherCharges);
+    }
+
+    return terms.length > 0 ? terms : (fallbackArray || []);
+  },
+
+  /**
+   * Helper: Extract risk factors as array from formatted object
+   */
+  _extractRiskFactorsArray(riskFactors, fallbackArray) {
+    if (!riskFactors || !Array.isArray(riskFactors)) return fallbackArray || [];
+
+    return riskFactors.map(rf => {
+      if (typeof rf === 'string') return rf;
+      if (rf.risk && rf.severity) {
+        return `[${rf.severity}] ${rf.risk}`;
+      }
+      return rf.risk || String(rf);
+    });
   },
 
   /**

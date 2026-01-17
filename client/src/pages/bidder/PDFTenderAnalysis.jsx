@@ -47,28 +47,45 @@ const TabButton = ({ active, onClick, children, icon: Icon }) => (
   </button>
 );
 
-// Score badge
+// Score badge with proper Tailwind color mapping
 const ScoreBadge = ({ score, size = 'md' }) => {
-  const color = score >= 80 ? 'green' : score >= 60 ? 'yellow' : score >= 40 ? 'orange' : 'red';
   const sizes = {
     sm: 'w-10 h-10 text-sm',
     md: 'w-14 h-14 text-lg',
     lg: 'w-20 h-20 text-2xl',
   };
 
+  const colorClasses = score >= 80
+    ? 'bg-green-100 text-green-700 border-green-300'
+    : score >= 60
+    ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
+    : score >= 40
+    ? 'bg-orange-100 text-orange-700 border-orange-300'
+    : 'bg-red-100 text-red-700 border-red-300';
+
   return (
-    <div className={`${sizes[size]} rounded-full flex items-center justify-center font-bold bg-${color}-100 text-${color}-700 border-2 border-${color}-300`}>
+    <div className={`${sizes[size]} rounded-full flex items-center justify-center font-bold border-2 ${colorClasses}`}>
       {score}
     </div>
   );
 };
 
-// Bullet list component
+// Color mapping for Tailwind (dynamic classes don't work with purge)
+const iconColorMap = {
+  blue: 'text-blue-500',
+  red: 'text-red-500',
+  green: 'text-green-500',
+  yellow: 'text-yellow-500',
+  orange: 'text-orange-500',
+  purple: 'text-purple-500',
+};
+
+// Bullet list component with proper color mapping
 const BulletList = ({ items, icon: Icon = CheckCircle, color = 'blue' }) => (
   <ul className="space-y-2">
     {items.map((item, idx) => (
       <li key={idx} className="flex items-start gap-2">
-        <Icon className={`w-4 h-4 mt-1 flex-shrink-0 text-${color}-500`} />
+        <Icon className={`w-4 h-4 mt-1 flex-shrink-0 ${iconColorMap[color] || 'text-blue-500'}`} />
         <span className="text-slate-700">{item}</span>
       </li>
     ))}
@@ -167,6 +184,9 @@ export default function PDFTenderAnalysis() {
       setUploadStage('analyzing');
 
       if (result.success) {
+        console.log('[PDFTenderAnalysis] Received analysis data:', result.data);
+        console.log('[PDFTenderAnalysis] normalizedSections:', result.data.normalizedSections);
+        console.log('[PDFTenderAnalysis] normalizedSections count:', result.data.normalizedSections?.length || 0);
         setAnalysis(result.data);
         setProposalSections(result.data.proposalDraft?.sections || []);
         setUploadStage('complete');
@@ -700,32 +720,61 @@ export default function PDFTenderAnalysis() {
                 </div>
               </div>
 
-              {/* Section Summaries */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
-                <h3 className="font-semibold text-slate-900 mb-4">Document Sections</h3>
-                <div className="space-y-2">
-                  {(analysis.summary.sectionSummaries || []).map((section) => (
-                    <div
-                      key={section.id}
-                      className="p-3 bg-slate-50 rounded-lg flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className={`px-2 py-1 text-xs font-medium rounded ${
-                          section.type === 'ELIGIBILITY' ? 'bg-green-100 text-green-700' :
-                          section.type === 'TECHNICAL' ? 'bg-purple-100 text-purple-700' :
-                          section.type === 'FINANCIAL' ? 'bg-yellow-100 text-yellow-700' :
-                          section.type === 'EVALUATION' ? 'bg-blue-100 text-blue-700' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
-                          {section.type}
-                        </span>
-                        <span className="font-medium text-slate-900">{section.title}</span>
+              {/* Normalized Sections (AI-summarized, bidder-friendly) */}
+              {analysis.normalizedSections && analysis.normalizedSections.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <h3 className="font-semibold text-slate-900 mb-4">Document Sections</h3>
+                  <div className="space-y-4">
+                    {analysis.normalizedSections.map((section, idx) => (
+                      <div
+                        key={section.category || idx}
+                        className="p-4 bg-slate-50 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${
+                              section.category === 'ELIGIBILITY' ? 'bg-green-100 text-green-700' :
+                              section.category === 'TECHNICAL' || section.category === 'SCOPE' ? 'bg-purple-100 text-purple-700' :
+                              section.category === 'COMMERCIAL' || section.category === 'FINANCIAL' ? 'bg-yellow-100 text-yellow-700' :
+                              section.category === 'EVALUATION' ? 'bg-blue-100 text-blue-700' :
+                              section.category === 'TIMELINE' ? 'bg-orange-100 text-orange-700' :
+                              section.category === 'PENALTIES' ? 'bg-red-100 text-red-700' :
+                              section.category === 'LEGAL' ? 'bg-indigo-100 text-indigo-700' :
+                              'bg-slate-100 text-slate-700'
+                            }`}>
+                              {section.category}
+                            </span>
+                            <span className="font-medium text-slate-900">{section.name}</span>
+                          </div>
+                          <span className="text-sm text-slate-500">{section.rawSectionCount} subsection{section.rawSectionCount !== 1 ? 's' : ''}</span>
+                        </div>
+                        {section.aiSummary && (
+                          <p className="text-sm text-slate-600 mb-2">{section.aiSummary}</p>
+                        )}
+                        {section.keyPoints && section.keyPoints.length > 0 && (
+                          <ul className="text-sm text-slate-700 space-y-1">
+                            {section.keyPoints.slice(0, 3).map((point, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <CheckCircle className="w-3 h-3 mt-1 text-green-500 flex-shrink-0" />
+                                <span>{point}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {section.importantNumbers && section.importantNumbers.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {section.importantNumbers.slice(0, 3).map((num, i) => (
+                              <span key={i} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                                {typeof num === 'object' ? `${num.label}: ${num.value}` : num}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <span className="text-sm text-slate-500">{section.wordCount} words</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

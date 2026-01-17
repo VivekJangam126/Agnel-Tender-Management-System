@@ -56,6 +56,7 @@ export const PDFAnalysisController = {
       }
 
       console.log(`[PDF Analysis] Complete: ${analysis.parsed.sections.length} sections, ${analysis.parsed.stats.totalWords} words`);
+      console.log(`[PDF Analysis] Controller received normalizedSections: ${analysis.normalizedSections?.length || 0} sections`);
 
       // Auto-save to database for discovery
       let savedTender = null;
@@ -97,14 +98,20 @@ export const PDFAnalysisController = {
         console.error('[PDF Analysis] Failed to save to database:', saveErr.message);
       }
 
+      const responseData = {
+        ...analysis,
+        // Include saved tender info if available
+        savedTenderId: savedTender?.id || null,
+        savedToDiscovery: !!savedTender,
+      };
+
+      console.log('[PDF Analysis] Sending response - keys:', Object.keys(responseData));
+      console.log('[PDF Analysis] Sending response - normalizedSections exists:', !!responseData.normalizedSections);
+      console.log('[PDF Analysis] Sending response - normalizedSections count:', responseData.normalizedSections?.length || 0);
+
       return res.json({
         success: true,
-        data: {
-          ...analysis,
-          // Include saved tender info if available
-          savedTenderId: savedTender?.id || null,
-          savedToDiscovery: !!savedTender,
-        },
+        data: responseData,
       });
     } catch (err) {
       console.error('[PDF Analysis] Error:', err);

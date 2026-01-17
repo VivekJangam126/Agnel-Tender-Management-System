@@ -2,11 +2,16 @@
  * Section Normalization Service
  * Groups raw PDF sections into bidder-friendly high-level sections
  * Generates AI summaries using RAG retrieval
+ *
+ * TWO-STAGE PIPELINE:
+ * - Stage 1 (Groq): Extract facts into strict JSON
+ * - Stage 2 (Gemini): Format JSON into UI-ready text
  */
 
 import { RAGOrchestrator } from '../utils/ragOrchestrator.js';
 import { LLMCaller } from '../utils/llmCaller.js';
 import { env } from '../config/env.js';
+import AIPostProcessor from './ai/postProcessor.js';
 
 const CHAT_MODEL = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
@@ -59,6 +64,7 @@ export const SectionNormalizationService = {
    */
   async normalizeSections(rawSections, sessionId = null) {
     console.log(`[Section Normalization] Processing ${rawSections.length} raw sections`);
+    console.log(`[Section Normalization] sessionId: ${sessionId}`);
 
     // Step 1: Group raw sections into normalized categories
     const groupedSections = this._groupSections(rawSections);
@@ -103,6 +109,7 @@ export const SectionNormalizationService = {
     }
 
     console.log(`[Section Normalization] Created ${normalizedSections.length} normalized sections`);
+    console.log('[Section Normalization] Categories created:', normalizedSections.map(s => s.category).join(', '));
 
     return normalizedSections;
   },
@@ -155,6 +162,10 @@ export const SectionNormalizationService = {
 
   /**
    * Generate AI summary for a normalized section
+   *
+   * TWO-STAGE PIPELINE:
+   * Stage 1 (Groq): Extract facts into strict JSON
+   * Stage 2 (Gemini): Format JSON into UI-ready text
    */
   async _generateSectionSummary(category, sectionName, rawSections, sessionId) {
     // Combine content from raw sections
@@ -180,36 +191,64 @@ export const SectionNormalizationService = {
       }
     }
 
-    const systemPrompt = `You are a tender analysis expert. Create a concise summary for bidders.
+    // ============================================
+    // STAGE 1: GROQ FACT EXTRACTION
+    // ============================================
+    const groqSystemPrompt = `You are a fact extraction engine for tender document sections.
 
-RULES:
-- Write 2-4 sentences maximum
-- Focus on actionable information
-- Extract key numbers, dates, and requirements
-- Use ONLY the provided content
-- If information is missing, say "Not specified"`;
+YOUR ONLY TASK: Extract factual information and output STRICT JSON.
 
-    const userPrompt = `SECTION: ${sectionName}
+CRITICAL RULES:
+- Output ONLY valid JSON - no prose, no explanations
+- Extract ONLY facts present in the provided content
+- Use EXACT values from the document
+- If information is NOT present, use null or empty array
+- Do NOT infer or hallucinate any information`;
 
-${ragContext ? `REFERENCE CONTEXT:\n${ragContext}\n\n` : ''}CONTENT:\n${combinedContent}
+    const groqUserPrompt = `EXTRACT FACTS FROM THIS TENDER SECTION:
 
-Create a bidder-friendly summary in JSON format:
+SECTION: ${sectionName}
+CATEGORY: ${category}
+
+${ragContext ? `CONTEXT:\n${ragContext}\n\n` : ''}CONTENT:\n${combinedContent}
+
+OUTPUT STRICT JSON (no other text):
 {
-  "summary": "2-4 sentence concise summary",
-  "keyPoints": ["key point 1", "key point 2", "key point 3"],
-  "importantNumbers": ["₹5 crores EMD", "30 days deadline", "minimum 5 years experience"]
+  "summary": "raw extracted summary of section content or null",
+  "keyPoints": ["extracted point 1", "extracted point 2", "extracted point 3"],
+  "importantNumbers": ["extracted number/date 1", "extracted number/date 2"]
 }`;
 
-    const response = await LLMCaller.call({
-      systemPrompt,
-      userPrompt,
+    const groqResponse = await LLMCaller.call({
+      systemPrompt: groqSystemPrompt,
+      userPrompt: groqUserPrompt,
       model: CHAT_MODEL,
-      temperature: 0.2,
+      temperature: 0, // Zero temperature for deterministic extraction
       maxTokens: 800,
     });
 
-    // Parse response
-    return this._parseAISummaryResponse(response, category, rawSections);
+    // Parse Groq response
+    const groqJson = this._parseAISummaryResponse(groqResponse, category, rawSections);
+
+    // ============================================
+    // STAGE 2: GEMINI FORMATTING
+    // ============================================
+    try {
+      const formattingResult = await AIPostProcessor.formatSectionWithGemini(groqJson, sectionName);
+
+      if (formattingResult.success) {
+        return {
+          summary: formattingResult.aiSummary || groqJson.summary,
+          keyPoints: formattingResult.keyPoints || groqJson.keyPoints,
+          importantNumbers: formattingResult.importantNumbers || groqJson.importantNumbers,
+        };
+      }
+    } catch (err) {
+      console.warn(`[Section Normalization] Gemini formatting failed for ${category}, using Groq output`);
+    }
+
+    // Fallback to Groq output if Gemini fails
+    return groqJson;
   },
 
   /**

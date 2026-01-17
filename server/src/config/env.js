@@ -64,6 +64,8 @@ export const env = (() => {
     JWT_SECRET: process.env.JWT_SECRET,
     // OpenAI API (for embeddings and proposal drafting)
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    // Gemini API (for post-processing and formatting)
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     // Optional AI tuning
     GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
     AI_TEMPERATURE: process.env.AI_TEMPERATURE || '0',
