@@ -4,11 +4,11 @@ export const tenderService = {
   listTenders: (token, filters = {}) => {
     const search = new URLSearchParams(filters);
     const query = search.toString();
-    return apiRequest(`/tenders${query ? `?${query}` : ''}`, { token });
+    return apiRequest(`/api/tenders${query ? `?${query}` : ''}`, { token });
   },
-  
+
   createTender: (payload, token) => 
-    apiRequest('/tenders', { method: 'POST', token, body: payload }),
+    apiRequest('/api/tenders', { method: 'POST', token, body: payload }),
   
   getTender: (id, token) => 
     apiRequest(`/api/tenders/${id}`, { token }),

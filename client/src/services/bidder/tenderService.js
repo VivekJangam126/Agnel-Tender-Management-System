@@ -52,12 +52,12 @@ export const tenderService = {
 
   // Other methods (authority-side, not used by bidder UI but keeping for completeness)
   createTender: async (data) => {
-    const response = await api.post('/tenders', data);
+    const response = await api.post('/api/tenders', data);
     return response;
   },
 
   getTenders: async (params) => {
-    const response = await api.get('/tenders', { params });
+    const response = await api.get('/api/tenders', { params });
     return response;
   },
 
