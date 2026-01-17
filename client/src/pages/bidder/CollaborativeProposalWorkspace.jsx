@@ -29,6 +29,8 @@ import {
   Clock,
   Save,
   RefreshCw,
+  Plus,
+  X,
 } from 'lucide-react';
 
 // Layout
@@ -44,6 +46,70 @@ import ValidationResultsPanel from '../../components/proposal/ValidationResultsP
 import { tenderService } from '../../services/bidder/tenderService';
 import { proposalService } from '../../services/bidder/proposalService';
 import { pdfAnalysisService } from '../../services/bidder/pdfAnalysisService';
+
+/**
+ * Quick Content Add Modal
+ */
+function QuickAddContentModal({ section, onAdd, onClose }) {
+  const [content, setContent] = useState('');
+
+  const handleAdd = () => {
+    if (content.trim()) {
+      onAdd(content);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Add Content to {section?.title || 'Section'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          <textarea
+            autoFocus
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Type your content here... You can paste or manually enter text for this section."
+            className="w-full h-64 p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+          <p className="text-sm text-slate-500 mt-2">
+            Word count: {content.trim().split(/\s+/).filter(Boolean).length}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-slate-700 font-medium hover:bg-slate-200 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleAdd}
+            disabled={!content.trim()}
+            className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+          >
+            Add Content
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Section List Component for the sidebar
@@ -169,6 +235,7 @@ function WorkspaceContent({
   const { isOwner, assignments, loading: collaborationLoading } = useCollaboration();
   const [showSidebar, setShowSidebar] = useState(true);
   const [showValidation, setShowValidation] = useState(false);
+  const [showAddContentModal, setShowAddContentModal] = useState(false);
 
   // Handle section content change
   const handleContentChange = useCallback(
@@ -182,6 +249,21 @@ function WorkspaceContent({
       }));
     },
     [activeSection, setSectionContents]
+  );
+
+  // Handle quick add content
+  const handleAddContent = useCallback(
+    (newContent) => {
+      if (!activeSection) return;
+      const sectionId =
+        activeSection.section_id || activeSection._id || activeSection.id || activeSection.key;
+      setSectionContents((prev) => ({
+        ...prev,
+        [sectionId]: (prev[sectionId] || '') + (prev[sectionId] ? '\n\n' : '') + newContent,
+      }));
+      setShowAddContentModal(false);
+    },
+    [activeSection]
   );
 
   // Handle save
@@ -248,6 +330,17 @@ function WorkspaceContent({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Add Content button */}
+            <button
+              onClick={() => setShowAddContentModal(true)}
+              disabled={!activeSection}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-colors"
+              title="Quickly add content to this section"
+            >
+              <Plus className="w-4 h-4" />
+              Add Content
+            </button>
+
             {/* Save button */}
             <button
               onClick={handleSave}
@@ -314,6 +407,15 @@ function WorkspaceContent({
           )}
         </div>
       </div>
+
+      {/* Quick Add Content Modal */}
+      {showAddContentModal && (
+        <QuickAddContentModal
+          section={activeSection}
+          onAdd={handleAddContent}
+          onClose={() => setShowAddContentModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -395,18 +497,100 @@ export default function CollaborativeProposalWorkspace() {
           const uploadedData = uploadedRes.data?.data || uploadedRes.data;
           setTender(uploadedData);
 
-          // For uploaded tenders, sections come from normalizedSections
-          const normalizedSections = uploadedData.normalizedSections || [];
-          const sectionsWithIds = normalizedSections.map((section, idx) => ({
-            ...section,
-            key: section.key || `section-${idx}`,
-            section_id: section.key || `section-${idx}`,
-          }));
-          setSections(sectionsWithIds);
+          // Load or create draft contents
+          let draftData = null;
+          let sectionsToUse = [];
+          
+          try {
+            const draftRes = await pdfAnalysisService.getProposalDraftByTenderId(uploadedTenderId);
+            draftData = draftRes.data?.data || draftRes.data;
+          } catch (err) {
+            if (err.response?.status === 404) {
+              // No draft exists - create one from analysis data or fallback static template
+              console.log('[Workspace] No draft found, creating from analysis data');
+              
+              // Extract AI-generated proposal draft from uploaded tender's analysisData
+              const aiProposalDraft = uploadedData.analysisData?.proposalDraft;
 
-          // Load draft contents
-          const draftRes = await pdfAnalysisService.getProposalDraft(uploadedTenderId);
-          const draftData = draftRes.data?.data || draftRes.data;
+              // Fallback static template if AI draft missing
+              const fallbackSections = [
+                {
+                  key: 'cover-letter',
+                  title: 'Cover Letter',
+                  content:
+                    'Dear Evaluation Committee,\n\nWe appreciate the opportunity to submit our proposal. [BIDDER_NAME] brings proven experience delivering similar projects on time and within budget.\n\nSincerely,\n[BIDDER_CONTACT]\n',
+                },
+                {
+                  key: 'technical-approach',
+                  title: 'Technical Approach & Methodology',
+                  content:
+                    'Our methodology is structured into discovery, design, implementation, and quality assurance. We align milestones with tender requirements and provide weekly reporting.\n\nKey steps:\n- Requirement validation\n- Solution design\n- Implementation with checkpoints\n- Testing & UAT\n- Handover & training\n',
+                },
+                {
+                  key: 'project-plan',
+                  title: 'Project Plan & Timeline',
+                  content:
+                    'We propose a phased timeline with clear milestones, risk mitigation, and stakeholder reviews.\n\nMilestones:\n- Week 1-2: Discovery & kickoff\n- Week 3-5: Design & approvals\n- Week 6-10: Build & integrations\n- Week 11-12: Testing & UAT\n- Week 13: Deployment & training\n',
+                },
+                {
+                  key: 'team-composition',
+                  title: 'Team Composition & Governance',
+                  content:
+                    'The team includes a project manager, lead architect, domain specialists, QA lead, and support engineers. Governance includes weekly steering meetings and risk reviews.\n\nRoles:\n- Project Manager: Oversight & reporting\n- Lead Architect: Solution design & quality\n- Engineers: Implementation\n- QA Lead: Testing & compliance\n- Support: Knowledge transfer & training\n',
+                },
+              ].map(section => ({
+                ...section,
+                wordCount: section.content.split(/\s+/).filter(Boolean).length,
+              }));
+
+              const initialSections = aiProposalDraft?.sections?.length
+                ? aiProposalDraft.sections.map(section => ({
+                    key: section.id || section.key,
+                    title: section.title,
+                    content: section.content || '',
+                    wordCount: section.wordCount || 0,
+                  }))
+                : fallbackSections;
+
+              try {
+                const createRes = await pdfAnalysisService.saveProposalDraft(
+                  uploadedTenderId,
+                  {
+                    sections: initialSections,
+                    title: uploadedData.title || 'Proposal Draft',
+                  }
+                );
+                draftData = createRes.data?.data || createRes.data;
+                console.log('[Workspace] Created initial draft with', aiProposalDraft?.sections?.length ? 'AI content' : 'fallback template');
+              } catch (createErr) {
+                console.error('[Workspace] Failed to create draft:', createErr);
+                // If API save failed, still use local fallback so user can edit
+                draftData = { sections: initialSections, title: uploadedData.title || 'Proposal Draft' };
+              }
+            } else {
+              throw err;
+            }
+          }
+
+          // Use proposal draft sections as the primary sections
+          if (draftData && draftData.sections) {
+            sectionsToUse = draftData.sections.map((section, idx) => ({
+              ...section,
+              key: section.key || section.section_key || `section-${idx}`,
+              section_id: section.key || section.section_key || `section-${idx}`,
+              title: section.title || section.sectionTitle || `Section ${idx + 1}`,
+            }));
+          } else {
+            // Fallback: use normalizedSections from uploaded tender
+            const normalizedSections = uploadedData.normalizedSections || [];
+            sectionsToUse = normalizedSections.map((section, idx) => ({
+              ...section,
+              key: section.key || `section-${idx}`,
+              section_id: section.key || `section-${idx}`,
+            }));
+          }
+          
+          setSections(sectionsToUse);
 
           if (draftData) {
             setProposal(draftData);
@@ -414,15 +598,16 @@ export default function CollaborativeProposalWorkspace() {
             const contents = {};
             if (draftData.sections) {
               draftData.sections.forEach((section) => {
-                contents[section.key || section.section_key] = section.content || '';
+                const sectionKey = section.key || section.section_key;
+                contents[sectionKey] = section.content || '';
               });
             }
             setSectionContents(contents);
           }
 
           // Set first section as active
-          if (sectionsWithIds.length > 0) {
-            setActiveSection(sectionsWithIds[0]);
+          if (sectionsToUse.length > 0) {
+            setActiveSection(sectionsToUse[0]);
           }
         }
       } catch (err) {
@@ -457,9 +642,22 @@ export default function CollaborativeProposalWorkspace() {
           const proposalId = proposal._id || proposal.proposal_id;
           await proposalService.updateProposalSection(proposalId, sectionId, content);
         } else {
-          // For uploaded tenders, save to draft
+          // For uploaded tenders, save to draft - need to send all sections
+          const updatedSections = sections.map(section => {
+            const sectionKey = section.key || section.section_key || section.section_id;
+            return {
+              key: sectionKey,
+              title: section.title || section.sectionTitle,
+              content: sectionKey === sectionId ? content : (sectionContents[sectionKey] || ''),
+              wordCount: sectionKey === sectionId 
+                ? content.split(/\s+/).filter(w => w).length 
+                : (section.wordCount || 0),
+            };
+          });
+          
           await pdfAnalysisService.saveProposalDraft(uploadedTenderId, {
-            sections: [{ key: sectionId, content }],
+            sections: updatedSections,
+            title: proposal.title || tender.title,
           });
         }
 
@@ -473,7 +671,7 @@ export default function CollaborativeProposalWorkspace() {
         setSaving(false);
       }
     },
-    [proposal, tenderType, uploadedTenderId]
+    [proposal, tenderType, uploadedTenderId, sections, sectionContents, tender]
   );
 
   // Handle back navigation

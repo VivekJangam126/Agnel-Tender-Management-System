@@ -29,6 +29,7 @@ import {
   Landmark,
   Minimize2,
   Users,
+  Plus,
 } from 'lucide-react';
 import BidderLayout from '../../components/bidder-layout/BidderLayout';
 import { pdfAnalysisService } from '../../services/bidder/pdfAnalysisService';
@@ -124,6 +125,33 @@ function CollaborativeProposalTab({
   const [showValidation, setShowValidation] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState({});
+  const [fillingWithTemplate, setFillingWithTemplate] = useState(false);
+  const [showAddSectionForm, setShowAddSectionForm] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+
+  // Fallback template sections
+  const fallbackSections = [
+    {
+      id: 'cover-letter',
+      title: 'Cover Letter',
+      content: 'Dear Evaluation Committee,\n\nThank you for the opportunity to participate. [BIDDER_NAME] offers proven delivery, robust governance, and clear accountability to meet all stated requirements.\n\nSincerely,\n[BIDDER_CONTACT]\n',
+    },
+    {
+      id: 'technical-approach',
+      title: 'Technical Approach & Methodology',
+      content: 'We apply a phased approach: discovery, design, implementation, testing, and go-live. Each phase includes checkpoints, risk reviews, and stakeholder demos.\n\nKey steps:\n- Validate requirements and success criteria\n- Design solution architecture and integrations\n- Implement with iterative builds\n- QA, UAT, and performance validation\n- Deployment, training, and hypercare\n',
+    },
+    {
+      id: 'project-plan',
+      title: 'Project Plan & Timeline',
+      content: 'Illustrative timeline with milestones and dependencies.\n\nMilestones:\n- Weeks 1-2: Kickoff, discovery, and approvals\n- Weeks 3-5: Design & architecture sign-off\n- Weeks 6-10: Build & integrations\n- Weeks 11-12: QA, UAT, hardening\n- Week 13: Go-live, training, hypercare\n',
+    },
+    {
+      id: 'team-composition',
+      title: 'Team Composition & Governance',
+      content: 'A balanced team with clear roles and escalation paths.\n\nRoles:\n- Project Manager: governance, reporting, risk\n- Lead Architect: design authority\n- Engineers: implementation\n- QA Lead: quality and validation\n- Support & Training: handover and enablement\n',
+    },
+  ].map(s => ({ ...s, wordCount: s.content.split(/\s+/).filter(Boolean).length }));
 
   // Initialize sections from normalizedSections or proposalSections
   const sections = React.useMemo(() => {
@@ -197,6 +225,214 @@ function CollaborativeProposalTab({
     } finally {
       setSaving(false);
     }
+  };
+
+  // Get relevant content based on section title/category
+  const getRelevantContent = (section) => {
+    const title = (section.title || section.name || '').toLowerCase();
+    const category = (section.category || '').toUpperCase();
+    
+    // Match by category first
+    if (category === 'ELIGIBILITY') {
+      return 'We meet all eligibility criteria specified in this tender:\n\n' +
+        '- Legal entity status: [COMPANY_NAME] is a registered entity with valid licenses\n' +
+        '- Technical qualifications: Certified professionals with relevant expertise\n' +
+        '- Financial capability: Demonstrated capacity with audited financials\n' +
+        '- Experience: Successfully completed similar projects\n' +
+        '- Compliance: No conflicts of interest, no blacklisting\n\n' +
+        'Supporting documentation is available upon request.';
+    }
+    
+    if (category === 'COMMERCIAL' || category === 'FINANCIAL') {
+      return 'Financial Proposal Summary:\n\n' +
+        '- Total quoted price: [AMOUNT]\n' +
+        '- Payment terms: As per tender requirements\n' +
+        '- Price validity: [VALIDITY_PERIOD]\n' +
+        '- Taxes: As applicable per law\n' +
+        '- Payment milestones: Aligned with deliverables\n\n' +
+        'Detailed cost breakdown is provided in the attached financial schedules.';
+    }
+    
+    if (category === 'SCOPE' || title.includes('scope')) {
+      return 'Scope of Work:\n\n' +
+        'We understand the scope includes the following deliverables and activities:\n\n' +
+        '- [Deliverable 1]: Description and acceptance criteria\n' +
+        '- [Deliverable 2]: Description and acceptance criteria\n' +
+        '- [Deliverable 3]: Description and acceptance criteria\n\n' +
+        'Our approach ensures full coverage of all specified requirements with clear milestones and quality gates.';
+    }
+    
+    if (category === 'TIMELINE' || title.includes('timeline') || title.includes('schedule')) {
+      return 'Project Timeline:\n\n' +
+        'Phase 1 (Weeks 1-2): Initiation & Planning\n' +
+        '- Project kickoff and resource mobilization\n' +
+        '- Requirement validation and baseline\n\n' +
+        'Phase 2 (Weeks 3-6): Design & Development\n' +
+        '- Solution design and architecture approval\n' +
+        '- Development and integration\n\n' +
+        'Phase 3 (Weeks 7-8): Testing & UAT\n' +
+        '- Quality assurance and user acceptance testing\n\n' +
+        'Phase 4 (Week 9): Deployment & Training\n' +
+        '- Go-live and knowledge transfer';
+    }
+    
+    if (category === 'PENALTIES' || title.includes('penalt') || title.includes('liabilit') || title.includes('risk')) {
+      return 'Risk Management & Liability:\n\n' +
+        'We acknowledge and accept the penalties, risks, and liabilities as defined in the tender:\n\n' +
+        '- Performance guarantees: As specified in contract terms\n' +
+        '- Liquidated damages: Acceptance of delay penalties\n' +
+        '- Indemnity clauses: Full compliance with liability provisions\n' +
+        '- Insurance coverage: Appropriate policies in place\n\n' +
+        'Our risk mitigation strategy ensures timely delivery and quality outcomes.';
+    }
+    
+    if (category === 'ANNEXURES' || title.includes('annexure') || title.includes('document') || title.includes('attachment')) {
+      return 'Supporting Documents:\n\n' +
+        'The following annexures and supporting documents are included:\n\n' +
+        '- Company registration and licenses\n' +
+        '- Financial statements and tax compliance certificates\n' +
+        '- Experience certificates and project references\n' +
+        '- Technical certifications of key personnel\n' +
+        '- Quality certifications (ISO, etc.)\n' +
+        '- Format compliance declarations\n\n' +
+        'All documents are certified true copies and available for verification.';
+    }
+    
+    // Match by title keywords
+    if (title.includes('overview') || title.includes('introduction') || title.includes('executive')) {
+      return 'Executive Overview:\n\n' +
+        '[BIDDER_NAME] is pleased to submit our proposal for this tender. We bring:\n\n' +
+        '- Proven expertise in similar engagements\n' +
+        '- Dedicated team with relevant qualifications\n' +
+        '- Strong track record of on-time delivery\n' +
+        '- Commitment to quality and compliance\n\n' +
+        'We understand the requirements and are fully equipped to deliver the expected outcomes within the stipulated timelines.';
+    }
+    
+    if (title.includes('cover') || title.includes('letter')) {
+      return 'Dear Evaluation Committee,\n\n' +
+        'Thank you for the opportunity to participate in this tender. [BIDDER_NAME] offers proven delivery, ' +
+        'robust governance, and clear accountability to meet all stated requirements.\n\n' +
+        'We have carefully reviewed the tender documents and confirm our commitment to delivering quality outcomes ' +
+        'within budget and timeline.\n\n' +
+        'Sincerely,\n[BIDDER_CONTACT]\n[DESIGNATION]\n[COMPANY_NAME]';
+    }
+    
+    if (title.includes('technical') || title.includes('approach') || title.includes('methodology')) {
+      return 'Technical Approach & Methodology:\n\n' +
+        'We apply a structured, phased approach:\n\n' +
+        '1. Discovery Phase: Requirements validation and baseline\n' +
+        '2. Design Phase: Solution architecture and approvals\n' +
+        '3. Implementation Phase: Build with iterative checkpoints\n' +
+        '4. Testing Phase: QA, UAT, and performance validation\n' +
+        '5. Deployment Phase: Go-live, training, and hypercare support\n\n' +
+        'Each phase includes risk reviews, stakeholder demos, and quality gates to ensure alignment with tender requirements.';
+    }
+    
+    if (title.includes('team') || title.includes('resource') || title.includes('personnel')) {
+      return 'Team Composition & Resources:\n\n' +
+        'Our team structure includes:\n\n' +
+        '- Project Manager: Overall governance and stakeholder management\n' +
+        '- Technical Lead/Architect: Solution design and quality assurance\n' +
+        '- Domain Specialists: Subject matter expertise\n' +
+        '- Implementation Team: Development and configuration\n' +
+        '- QA Lead: Testing, validation, and compliance\n' +
+        '- Support Team: Training and post-deployment support\n\n' +
+        'All team members have relevant certifications and proven experience in similar projects.';
+    }
+    
+    if (title.includes('quality') || title.includes('compliance')) {
+      return 'Quality Assurance & Compliance:\n\n' +
+        'Our quality framework ensures:\n\n' +
+        '- Adherence to specified standards and regulations\n' +
+        '- Regular audits and compliance checks\n' +
+        '- Documented quality processes and procedures\n' +
+        '- Defect management and continuous improvement\n' +
+        '- Acceptance criteria validation at each milestone\n\n' +
+        'We hold relevant certifications (ISO 9001, etc.) and follow industry best practices.';
+    }
+    
+    // Default generic content
+    return 'Response to: ' + (section.title || section.name || 'Section') + '\n\n' +
+      'We have reviewed the requirements specified in this section and confirm our understanding and compliance.\n\n' +
+      'Key Points:\n' +
+      '- We meet all stated criteria and requirements\n' +
+      '- Our approach is aligned with tender expectations\n' +
+      '- Supporting evidence and documentation are provided\n' +
+      '- We commit to full compliance with terms and conditions\n\n' +
+      '[Please customize this section with specific details relevant to the tender requirements]';
+  };
+
+  // Handle filling with template/fallback content
+  const handleFillWithTemplate = async () => {
+    setFillingWithTemplate(true);
+    try {
+      // Generate relevant content for each existing section
+      const filledSections = sections.map((section) => ({
+        ...section,
+        id: section.section_id || section.id || section.key,
+        content: getRelevantContent(section),
+        wordCount: getRelevantContent(section).split(/\s+/).filter(Boolean).length,
+      }));
+      
+      // Update proposal sections
+      setProposalSections(filledSections);
+      
+      // Update section contents
+      const contents = {};
+      filledSections.forEach((section) => {
+        const sectionId = section.id || section.section_id || section.key;
+        contents[sectionId] = section.content || '';
+      });
+      setSectionContents(contents);
+      
+      // Keep current active section or set first
+      if (!activeSection && sections.length > 0) {
+        setActiveSection(sections[0]);
+      }
+
+      // Auto-save after filling
+      setTimeout(() => {
+        onSaveDraft();
+      }, 300);
+    } catch (err) {
+      console.error('Error filling with template:', err);
+    } finally {
+      setFillingWithTemplate(false);
+    }
+  };
+
+  // Handle adding custom section
+  const handleAddCustomSection = () => {
+    if (!newSectionTitle.trim()) return;
+
+    const customSectionId = `custom-${Date.now()}`;
+    const customSection = {
+      id: customSectionId,
+      section_id: customSectionId,
+      key: customSectionId,
+      title: newSectionTitle.trim(),
+      content: '',
+      wordCount: 0,
+      category: 'CUSTOM',
+      isCustom: true,
+    };
+
+    // Add to proposal sections
+    setProposalSections((prev) => [...prev, customSection]);
+
+    // Add to section contents
+    setSectionContents((prev) => ({
+      ...prev,
+      [customSectionId]: '',
+    }));
+
+    // Set as active section
+    setActiveSection(customSection);
+
+    // Reset form
+    setNewSectionTitle('');
+    setShowAddSectionForm(false);
   };
 
   // Get section status
@@ -293,11 +529,72 @@ function CollaborativeProposalTab({
                 </button>
               );
             })}
+
+            {/* Add Custom Section Form */}
+            {showAddSectionForm ? (
+              <div className="p-4 border-t border-slate-200 bg-slate-50">
+                <input
+                  type="text"
+                  value={newSectionTitle}
+                  onChange={(e) => setNewSectionTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddCustomSection();
+                    if (e.key === 'Escape') {
+                      setShowAddSectionForm(false);
+                      setNewSectionTitle('');
+                    }
+                  }}
+                  placeholder="Section title..."
+                  autoFocus
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddCustomSection}
+                    disabled={!newSectionTitle.trim()}
+                    className="flex-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-medium rounded-lg"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddSectionForm(false);
+                      setNewSectionTitle('');
+                    }}
+                    className="flex-1 px-3 py-1.5 text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAddSectionForm(true)}
+                className="w-full px-4 py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 border-t border-slate-200 flex items-center justify-center gap-2 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Custom Section
+              </button>
+            )}
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="mt-4 space-y-2">
+          <button
+            onClick={handleFillWithTemplate}
+            disabled={fillingWithTemplate}
+            className="w-full px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white font-medium rounded-lg flex items-center justify-center gap-2"
+            title="Fill all sections with professional template content"
+          >
+            {fillingWithTemplate ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            Fill with Template
+          </button>
+
           <button
             onClick={onSaveDraft}
             disabled={savingDraft}
@@ -405,6 +702,33 @@ export default function PDFTenderAnalysis() {
   const [expandedSections, setExpandedSections] = useState({});
   const [editingSection, setEditingSection] = useState(null);
   const [regeneratingSection, setRegeneratingSection] = useState(null);
+  // Fallback template when AI draft sections are unavailable
+  const buildFallbackSections = () => [
+    {
+      id: 'cover-letter',
+      title: 'Cover Letter',
+      content:
+        'Dear Evaluation Committee,\n\nThank you for the opportunity to participate. [BIDDER_NAME] offers proven delivery, robust governance, and clear accountability to meet all stated requirements.\n\nSincerely,\n[BIDDER_CONTACT]\n',
+    },
+    {
+      id: 'technical-approach',
+      title: 'Technical Approach & Methodology',
+      content:
+        'We apply a phased approach: discovery, design, implementation, testing, and go-live. Each phase includes checkpoints, risk reviews, and stakeholder demos.\n\nKey steps:\n- Validate requirements and success criteria\n- Design solution architecture and integrations\n- Implement with iterative builds\n- QA, UAT, and performance validation\n- Deployment, training, and hypercare\n',
+    },
+    {
+      id: 'project-plan',
+      title: 'Project Plan & Timeline',
+      content:
+        'Illustrative timeline with milestones and dependencies.\n\nMilestones:\n- Weeks 1-2: Kickoff, discovery, and approvals\n- Weeks 3-5: Design & architecture sign-off\n- Weeks 6-10: Build & integrations\n- Weeks 11-12: QA, UAT, hardening\n- Week 13: Go-live, training, hypercare\n',
+    },
+    {
+      id: 'team-composition',
+      title: 'Team Composition & Governance',
+      content:
+        'A balanced team with clear roles and escalation paths.\n\nRoles:\n- Project Manager: governance, reporting, risk\n- Lead Architect: design authority\n- Engineers: implementation\n- QA Lead: quality and validation\n- Support & Training: handover and enablement\n',
+    },
+  ].map(s => ({ ...s, wordCount: s.content.split(/\s+/).filter(Boolean).length }));
 
   // File upload state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -485,7 +809,9 @@ export default function PDFTenderAnalysis() {
         console.log('[PDFTenderAnalysis] normalizedSections:', result.data.normalizedSections);
         console.log('[PDFTenderAnalysis] normalizedSections count:', result.data.normalizedSections?.length || 0);
         setAnalysis(result.data);
-        setProposalSections(result.data.proposalDraft?.sections || []);
+        const aiSections = result.data.proposalDraft?.sections || [];
+        const sections = aiSections.length ? aiSections : buildFallbackSections();
+        setProposalSections(sections);
         setUploadStage('complete');
         setActiveTab('summary');
 
@@ -499,7 +825,8 @@ export default function PDFTenderAnalysis() {
           // Auto-create uploaded tender so assignments don't depend on manual save
           try {
             // Build a minimal payload to stay well under body-size limits
-            const minimalSections = (result.data?.proposalDraft?.sections || []).map(s => ({
+            const minimalSectionsSource = result.data?.proposalDraft?.sections || [];
+            const minimalSections = (minimalSectionsSource.length ? minimalSectionsSource : buildFallbackSections()).map(s => ({
               id: s.id,
               title: s.title,
               content: s.content,

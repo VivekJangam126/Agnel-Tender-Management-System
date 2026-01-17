@@ -51,11 +51,18 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Evaluation results
    */
   async evaluateProposal(sessionId, proposal, tenderId = null) {
-    // Send ONLY minimal data - backend loads context internally
+    const sections = proposal?.sections || [];
+    if (!sessionId) {
+      throw new Error('Missing analysis sessionId for evaluation');
+    }
+    if (!Array.isArray(sections) || sections.length === 0) {
+      throw new Error('No proposal sections provided for evaluation');
+    }
+
     const response = await api.post('/pdf/evaluate', {
       sessionId,
       proposal: {
-        sections: proposal.sections.map(s => ({
+        sections: sections.map(s => ({
           id: s.id,
           title: s.title,
           content: s.content,
@@ -114,16 +121,37 @@ export const pdfAnalysisService = {
   // ==========================================
 
   /**
+   * Get uploaded tender by ID
+   * @param {string} uploadedTenderId - Uploaded tender ID
+   * @returns {Promise<Object>} Uploaded tender data
+   */
+  async getUploadedTender(uploadedTenderId) {
+    const response = await api.get(`/bidder/uploaded-tenders/${uploadedTenderId}`);
+    return response.data;
+  },
+
+  /**
    * Save or update a proposal draft for an uploaded tender
-   * @param {Object} params - { uploadedTenderId, sections, title? }
+   * @param {string} uploadedTenderId - Uploaded tender ID
+   * @param {Object} params - { sections, title? }
    * @returns {Promise<Object>} Saved draft
    */
-  async saveProposalDraft({ uploadedTenderId, sections, title }) {
+  async saveProposalDraft(uploadedTenderId, params) {
     const response = await api.post('/bidder/uploaded-proposal-drafts', {
       uploadedTenderId,
-      sections,
-      title,
+      sections: params.sections,
+      title: params.title,
     });
+    return response.data;
+  },
+
+  /**
+   * Get proposal draft by uploaded tender ID
+   * @param {string} uploadedTenderId - Uploaded tender ID
+   * @returns {Promise<Object>} Draft data
+   */
+  async getProposalDraft(uploadedTenderId) {
+    const response = await api.get(`/bidder/uploaded-proposal-drafts/tender/${uploadedTenderId}`);
     return response.data;
   },
 
@@ -148,13 +176,12 @@ export const pdfAnalysisService = {
   },
 
   /**
-   * Get proposal draft by uploaded tender ID
+   * Get proposal draft by uploaded tender ID (DEPRECATED - use getProposalDraft)
    * @param {string} uploadedTenderId - Uploaded tender ID
    * @returns {Promise<Object>} Draft data
    */
   async getProposalDraftByTenderId(uploadedTenderId) {
-    const response = await api.get(`/bidder/uploaded-proposal-drafts/tender/${uploadedTenderId}`);
-    return response.data;
+    return this.getProposalDraft(uploadedTenderId);
   },
 
   /**
