@@ -47,7 +47,7 @@ export const proposalExportService = {
     const { format = 'pdf', template = 'formal' } = options;
 
     try {
-      const response = await api.get(`/bidder/proposals/${proposalId}/export`, {
+      const response = await api.get(`/api/bidder/proposals/${proposalId}/export`, {
         params: { format, template },
         responseType: 'blob'
       });
@@ -67,7 +67,7 @@ export const proposalExportService = {
    */
   getExportPreview: async (proposalId, template = 'formal') => {
     try {
-      const response = await api.get(`/bidder/proposals/${proposalId}/export/preview`, {
+      const response = await api.get(`/api/bidder/proposals/${proposalId}/export/preview`, {
         params: { template }
       });
       return response.data;

@@ -16,7 +16,7 @@ export const insightsService = {
    * @returns {Promise<Object>} Risk assessment data
    */
   async getProposalRisk(proposalId) {
-    const response = await api.get(`/bidder/proposals/${proposalId}/risk`);
+    const response = await api.get(`/api/bidder/proposals/${proposalId}/risk`);
     return response.data;
   },
 
@@ -39,7 +39,7 @@ export const insightsService = {
    * @returns {Promise<Object>} Compliance check results
    */
   async getProposalCompliance(proposalId) {
-    const response = await api.get(`/bidder/proposals/${proposalId}/compliance`);
+    const response = await api.get(`/api/bidder/proposals/${proposalId}/compliance`);
     return response.data;
   },
 
@@ -76,7 +76,7 @@ export const insightsService = {
     const params = new URLSearchParams({ limit, offset });
     if (actions) params.append('actions', actions.join(','));
 
-    const response = await api.get(`/bidder/proposals/${proposalId}/audit?${params}`);
+    const response = await api.get(`/api/bidder/proposals/${proposalId}/audit?${params}`);
     return response.data;
   },
 

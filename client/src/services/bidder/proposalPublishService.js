@@ -44,7 +44,7 @@ export const proposalPublishService = {
    */
   finalizeProposal: async (proposalId) => {
     try {
-      const response = await api.post(`/bidder/proposals/${proposalId}/finalize`);
+      const response = await api.post(`/api/bidder/proposals/${proposalId}/finalize`);
       return response.data;
     } catch (error) {
       console.error('[Publish Service] Finalize failed:', error);
@@ -63,7 +63,7 @@ export const proposalPublishService = {
    */
   publishProposal: async (proposalId) => {
     try {
-      const response = await api.post(`/bidder/proposals/${proposalId}/publish`);
+      const response = await api.post(`/api/bidder/proposals/${proposalId}/publish`);
       return response.data;
     } catch (error) {
       console.error('[Publish Service] Publish failed:', error);
@@ -79,7 +79,7 @@ export const proposalPublishService = {
    */
   revertToDraft: async (proposalId) => {
     try {
-      const response = await api.post(`/bidder/proposals/${proposalId}/revert`);
+      const response = await api.post(`/api/bidder/proposals/${proposalId}/revert`);
       return response.data;
     } catch (error) {
       console.error('[Publish Service] Revert failed:', error);
@@ -95,7 +95,7 @@ export const proposalPublishService = {
    */
   createNewVersion: async (proposalId) => {
     try {
-      const response = await api.post(`/bidder/proposals/${proposalId}/new-version`);
+      const response = await api.post(`/api/bidder/proposals/${proposalId}/new-version`);
       return response.data;
     } catch (error) {
       console.error('[Publish Service] Create version failed:', error);
@@ -111,7 +111,7 @@ export const proposalPublishService = {
    */
   getVersionHistory: async (proposalId) => {
     try {
-      const response = await api.get(`/bidder/proposals/${proposalId}/versions`);
+      const response = await api.get(`/api/bidder/proposals/${proposalId}/versions`);
       return response.data;
     } catch (error) {
       console.error('[Publish Service] Get versions failed:', error);
@@ -128,7 +128,7 @@ export const proposalPublishService = {
    */
   getVersionSnapshot: async (proposalId, versionNumber) => {
     try {
-      const response = await api.get(`/bidder/proposals/${proposalId}/versions/${versionNumber}`);
+      const response = await api.get(`/api/bidder/proposals/${proposalId}/versions/${versionNumber}`);
       return response.data;
     } catch (error) {
       console.error('[Publish Service] Get version snapshot failed:', error);

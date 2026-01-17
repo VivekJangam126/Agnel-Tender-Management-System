@@ -18,7 +18,7 @@ export const aiService = {
    * Analyze tender for insights (match score, strengths, concerns)
    */
   analyzeTender: async (tenderId) => {
-    const response = await api.post('/bidder/tenders/' + tenderId + '/analyze', {
+    const response = await api.post('/api/bidder/tenders/' + tenderId + '/analyze', {
       question: 'Analyze this tender comprehensively. Provide: 1) Key requirements summary, 2) Potential risks, 3) Strategic recommendations for bidding.'
     });
     return response;
@@ -29,7 +29,7 @@ export const aiService = {
    * Returns: executive summary, key requirements, risks, opportunity score
    */
   getTenderSummary: async (tenderId) => {
-    const response = await api.get('/bidder/tenders/' + tenderId + '/summary');
+    const response = await api.get('/api/bidder/tenders/' + tenderId + '/summary');
     return response;
   },
 
@@ -38,7 +38,7 @@ export const aiService = {
    * Returns: executive summary, bullet points by category, section summaries, action items
    */
   getComprehensiveSummary: async (tenderId) => {
-    const response = await api.get('/bidder/tenders/' + tenderId + '/ai-summary');
+    const response = await api.get('/api/bidder/tenders/' + tenderId + '/ai-summary');
     return response;
   },
 
@@ -46,7 +46,7 @@ export const aiService = {
    * Get quick summary for list views (lightweight)
    */
   getQuickSummary: async (tenderId) => {
-    const response = await api.get('/bidder/tenders/' + tenderId + '/quick-summary');
+    const response = await api.get('/api/bidder/tenders/' + tenderId + '/quick-summary');
     return response;
   },
 
@@ -56,7 +56,7 @@ export const aiService = {
    * @param {Object} options - { sectionId, sectionType, tenderRequirement, organizationContext?, customInstructions? }
    */
   generateSectionDraft: async (tenderId, options) => {
-    const response = await api.post('/bidder/tenders/' + tenderId + '/generate-section-draft', options);
+    const response = await api.post('/api/bidder/tenders/' + tenderId + '/generate-section-draft', options);
     return response;
   },
 
@@ -66,7 +66,7 @@ export const aiService = {
    * @param {string} organizationContext - Optional context about the bidder organization
    */
   generateFullDraft: async (tenderId, organizationContext) => {
-    const response = await api.post('/bidder/tenders/' + tenderId + '/generate-full-draft', {
+    const response = await api.post('/api/bidder/tenders/' + tenderId + '/generate-full-draft', {
       organizationContext
     });
     return response;
@@ -79,7 +79,7 @@ export const aiService = {
    */
   improveDraft: async (options) => {
     // Using a placeholder ID since this is a stateless operation
-    const response = await api.post('/bidder/proposals/_/improve-draft', options);
+    const response = await api.post('/api/bidder/proposals/_/improve-draft', options);
     return response;
   },
 
@@ -90,7 +90,7 @@ export const aiService = {
    * length: 'short' | 'medium' | 'long'
    */
   generateSnippet: async (options) => {
-    const response = await api.post('/bidder/proposals/generate-snippet', options);
+    const response = await api.post('/api/bidder/proposals/generate-snippet', options);
     return response;
   },
 
