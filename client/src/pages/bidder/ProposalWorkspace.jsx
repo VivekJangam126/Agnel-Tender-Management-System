@@ -31,7 +31,10 @@ import { proposalService } from '../../services/bidder/proposalService';
 import proposalExportService from '../../services/bidder/proposalExportService';
 
 // Icons
-import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard } from 'lucide-react';
+import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard, Shield, Clock } from 'lucide-react';
+
+// Insight Components
+import { RiskScoreCard, AuditTrail } from '../../components/insights';
 
 // Styles
 import '../../styles/proposal-theme.css';
@@ -67,6 +70,7 @@ export default function ProposalWorkspace() {
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showInsightsPanel, setShowInsightsPanel] = useState(false); // Risk & Audit panel
 
   // Accessibility announcements
   const { announce, announceSaved } = useA11yAnnounce();
@@ -481,6 +485,21 @@ export default function ProposalWorkspace() {
                 <span className="text-xs">{showAIAdvisor ? 'AI ✓' : 'AI ✗'}</span>
               </button>
 
+              {/* Toggle Risk & Audit Panel */}
+              <button
+                onClick={() => setShowInsightsPanel(!showInsightsPanel)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  showInsightsPanel
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title={showInsightsPanel ? "Hide risk & audit panel" : "Show risk & audit panel"}
+                aria-pressed={showInsightsPanel}
+              >
+                <Shield className="w-4 h-4" />
+                <span className="text-xs">Risk</span>
+              </button>
+
               {/* Fullscreen Toggle */}
               <button
                 onClick={() => setFullscreenMode(!fullscreenMode)}
@@ -551,6 +570,42 @@ export default function ProposalWorkspace() {
                     <p>No section selected</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Right: Risk & Audit Panel */}
+            {showInsightsPanel && (
+              <div className="w-80 lg:w-96 flex-shrink-0 border-l border-slate-200 flex flex-col bg-slate-50 overflow-y-auto">
+                <div className="p-4 space-y-4">
+                  {/* Panel Header */}
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                    <Shield className="w-5 h-5 text-amber-600" />
+                    <h3 className="font-semibold text-slate-900">Risk & Compliance</h3>
+                  </div>
+
+                  {/* Risk Score Card */}
+                  {proposal && (proposal._id || proposal.proposal_id) && (
+                    <RiskScoreCard
+                      proposalId={proposal._id || proposal.proposal_id}
+                      compact={true}
+                    />
+                  )}
+
+                  {/* Audit Trail */}
+                  <div className="pt-2">
+                    <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                      <Clock className="w-5 h-5 text-blue-600" />
+                      <h3 className="font-semibold text-slate-900">Activity Log</h3>
+                    </div>
+                  </div>
+                  {proposal && (proposal._id || proposal.proposal_id) && (
+                    <AuditTrail
+                      proposalId={proposal._id || proposal.proposal_id}
+                      compact={true}
+                      maxItems={8}
+                    />
+                  )}
+                </div>
               </div>
             )}
           </div>

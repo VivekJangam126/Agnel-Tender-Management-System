@@ -37,6 +37,10 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import bidderRoutes from './routes/bidder.routes.js';
 import pdfAnalysisRoutes from './routes/pdfAnalysis.routes.js';
 import collaborationRoutes from './routes/collaboration.routes.js';
+import insightsRoutes from './routes/insights.routes.js';
+
+// Services that need initialization
+import { AuditLogService } from './services/auditLog.service.js';
 
 // Error handler
 import { errorHandler } from './middlewares/error.middleware.js';
@@ -72,6 +76,12 @@ app.use('/api/evaluation', evaluationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/pdf', pdfAnalysisRoutes);
 app.use('/api/collaboration', collaborationRoutes);
+app.use('/api/insights', insightsRoutes);
+
+// Initialize audit log table on startup
+AuditLogService.initializeTable().catch(err => {
+  console.error('[App] Failed to initialize audit log table:', err.message);
+});
 
 // 404 handler
 app.use((req, res) => {
