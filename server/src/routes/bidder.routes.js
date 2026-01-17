@@ -9,6 +9,9 @@ import { ProposalDrafterService } from '../services/proposalDrafter.service.js';
 import { UploadedTenderService } from '../services/uploadedTender.service.js';
 import { SavedTenderService } from '../services/savedTender.service.js';
 import { UploadedProposalDraftService } from '../services/uploadedProposalDraft.service.js';
+import { RiskAssessmentService } from '../services/riskAssessment.service.js';
+import { ComplianceCheckService } from '../services/complianceCheck.service.js';
+import { AuditLogService } from '../services/auditLog.service.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
 import { aiRateLimiter } from '../middlewares/rate-limit.middleware.js';
@@ -707,7 +710,10 @@ router.post('/proposals', requireAuth, requireRole('BIDDER'), async (req, res, n
     }
 
     const proposalData = await ProposalService.createProposalDraft(tenderId, req.user);
-    
+
+    // Log audit action (non-blocking)
+    AuditLogService.logProposalCreate(proposalData.proposal_id, req.user.userId, tenderId, req).catch(() => {});
+
     // Transform to Omkar's expected format
     const proposal = {
       _id: proposalData.proposal_id,
@@ -715,7 +721,7 @@ router.post('/proposals', requireAuth, requireRole('BIDDER'), async (req, res, n
       status: proposalData.status,
       createdAt: proposalData.created_at
     };
-    
+
     console.log('[POST /api/bidder/proposals] SUCCESS: Created proposal', proposal._id);
     res.status(201).json({ data: { proposal } });
   } catch (err) {
@@ -790,6 +796,24 @@ router.get('/proposals/tender/:tenderId', requireAuth, requireRole('BIDDER'), as
         [p.proposal_id]
       );
       
+      // Quick compliance check (non-blocking)
+      let complianceWarnings = null;
+      try {
+        const quickCompliance = await ComplianceCheckService.quickComplianceCheck(p.proposal_id);
+        if (quickCompliance.status !== 'COMPLIANT') {
+          complianceWarnings = {
+            status: quickCompliance.status,
+            mandatoryComplete: quickCompliance.mandatoryComplete,
+            mandatoryTotal: quickCompliance.mandatoryTotal,
+            completionPercent: quickCompliance.completionPercent,
+            daysRemaining: quickCompliance.daysRemaining,
+            issues: quickCompliance.issues
+          };
+        }
+      } catch (compErr) {
+        console.error('[Bidder] Quick compliance check failed:', compErr.message);
+      }
+
       const proposal = {
         _id: p.proposal_id,
         tenderId: p.tender_id,
@@ -799,13 +823,14 @@ router.get('/proposals/tender/:tenderId', requireAuth, requireRole('BIDDER'), as
         totalSections: parseInt(p.total_sections) || 0,
         createdAt: p.created_at,
         updatedAt: p.updated_at,
+        complianceWarnings, // Include compliance warnings if any
         sections: responsesQuery.rows.map(r => ({
           sectionId: r.section_id,
           sectionName: r.section_name,
           content: r.content || ''
         }))
       };
-      
+
       return res.json({ data: { proposal } });
     }
     
@@ -893,6 +918,10 @@ router.put('/proposals/:id/sections/:sectionId', requireAuth, requireRole('BIDDE
     }
 
     const response = await ProposalService.upsertSectionResponse(id, sectionId, content, req.user);
+
+    // Log audit action (non-blocking)
+    AuditLogService.logSectionEdit(id, req.user.userId, sectionId, null, req).catch(() => {});
+
     res.json(response);
   } catch (err) {
     if (err.message === 'Proposal not found') return res.status(404).json({ error: err.message });
@@ -911,7 +940,10 @@ router.post('/proposals/:id/submit', requireAuth, requireRole('BIDDER'), async (
   try {
     const { id } = req.params;
     const proposalData = await ProposalService.submitProposal(id, req.user);
-    
+
+    // Log audit action (non-blocking)
+    AuditLogService.logProposalSubmit(id, req.user.userId, req).catch(() => {});
+
     // Transform to Omkar's expected format
     const proposal = {
       _id: proposalData.proposal_id,
@@ -920,7 +952,7 @@ router.post('/proposals/:id/submit', requireAuth, requireRole('BIDDER'), async (
       createdAt: proposalData.created_at,
       submittedAt: proposalData.submitted_at
     };
-    
+
     res.json({ data: { proposal } });
   } catch (err) {
     // Validation errors with detailed feedback
@@ -1046,6 +1078,9 @@ router.get('/proposals/:id/export', requireAuth, requireRole('BIDDER'), async (r
       contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       filename = `proposal_${id}_${template}.docx`;
     }
+
+    // Log audit action (non-blocking)
+    AuditLogService.logProposalExport(id, req.user.userId, format, template, req).catch(() => {});
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -1708,6 +1743,128 @@ router.delete('/uploaded-proposal-drafts/:id', requireAuth, requireRole('BIDDER'
     res.json({
       success: true,
       message: 'Draft deleted successfully'
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==========================================
+// RISK ASSESSMENT & COMPLIANCE ENDPOINTS
+// ==========================================
+
+/**
+ * GET /api/bidder/proposals/:id/risk
+ * Get AI risk assessment for a proposal
+ */
+router.get('/proposals/:id/risk', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Verify ownership
+    const ownerCheck = await pool.query(
+      'SELECT organization_id FROM proposal WHERE proposal_id = $1',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    if (ownerCheck.rows[0].organization_id !== req.user.organizationId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const assessment = await RiskAssessmentService.calculateRiskScore(id);
+
+    res.json({
+      success: true,
+      data: assessment
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/proposals/:id/compliance
+ * Get compliance check results for a proposal
+ */
+router.get('/proposals/:id/compliance', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Verify ownership
+    const ownerCheck = await pool.query(
+      'SELECT organization_id FROM proposal WHERE proposal_id = $1',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    if (ownerCheck.rows[0].organization_id !== req.user.organizationId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const compliance = await ComplianceCheckService.checkProposalCompliance(id);
+
+    res.json({
+      success: true,
+      data: compliance
+    });
+  } catch (err) {
+    if (err.message === 'Proposal not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * GET /api/bidder/proposals/:id/audit
+ * Get audit trail for a proposal
+ */
+router.get('/proposals/:id/audit', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+
+    // Verify ownership
+    const ownerCheck = await pool.query(
+      'SELECT organization_id FROM proposal WHERE proposal_id = $1',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    if (ownerCheck.rows[0].organization_id !== req.user.organizationId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const logs = await AuditLogService.getLogsForProposal(id, {
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    const totalCount = await AuditLogService.getLogCount(id);
+
+    res.json({
+      success: true,
+      data: {
+        logs,
+        pagination: {
+          total: totalCount,
+          limit: parseInt(limit),
+          offset: parseInt(offset)
+        }
+      }
     });
   } catch (err) {
     next(err);

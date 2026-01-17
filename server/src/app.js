@@ -39,6 +39,10 @@ import pdfAnalysisRoutes from './routes/pdfAnalysis.routes.js';
 import uploadedTenderRoutes from './routes/uploadedTender.routes.js';
 import collaborationRoutes from './routes/collaboration.routes.js';
 import reviewerRoutes from './routes/reviewer.routes.js'; // Assister routes
+import insightsRoutes from './routes/insights.routes.js';
+
+// Services that need initialization
+import { AuditLogService } from './services/auditLog.service.js';
 
 // Error handler
 import { errorHandler } from './middlewares/error.middleware.js';
@@ -77,6 +81,12 @@ app.use('/api/pdf', pdfAnalysisRoutes);
 app.use('/api/uploaded-tender', uploadedTenderRoutes);
 app.use('/api/collaboration', collaborationRoutes);
 app.use('/api/assister', reviewerRoutes); // Assister routes (reuses reviewer route handlers)
+app.use('/api/insights', insightsRoutes);
+
+// Initialize audit log table on startup
+AuditLogService.initializeTable().catch(err => {
+  console.error('[App] Failed to initialize audit log table:', err.message);
+});
 
 // 404 handler
 app.use((req, res) => {
