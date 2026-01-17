@@ -25,6 +25,20 @@ export const UploadedTenderService = {
       metadata = {},
     } = data;
 
+    // Check for existing tender with same title by this user (prevent duplicates)
+    const existingCheck = await pool.query(
+      `SELECT uploaded_tender_id FROM uploaded_tender 
+       WHERE user_id = $1 AND title = $2 
+       LIMIT 1`,
+      [userId, title]
+    );
+
+    if (existingCheck.rows.length > 0) {
+      console.log(`[UploadedTender] Duplicate detected for title: "${title}" - Updating existing record`);
+      // Update existing instead of creating duplicate
+      return this.update(existingCheck.rows[0].uploaded_tender_id, data, userId);
+    }
+
     // Extract metadata from analysis
     const authorityName = metadata.authority || parsedData?.metadata?.authority || null;
     const referenceNumber = metadata.referenceNumber || parsedData?.metadata?.referenceNumber || null;
@@ -175,8 +189,8 @@ export const UploadedTenderService = {
              o.name as organization_name,
              u.name as uploaded_by_name
       FROM uploaded_tender ut
-      JOIN organization o ON ut.organization_id = o.organization_id
-      JOIN "user" u ON ut.user_id = u.user_id
+      LEFT JOIN organization o ON ut.organization_id = o.organization_id
+      LEFT JOIN "user" u ON ut.user_id = u.user_id
       WHERE ut.status = 'ANALYZED'
     `;
 
@@ -203,6 +217,57 @@ export const UploadedTenderService = {
   },
 
   /**
+   * Get uploaded tenders for a specific user
+   * @param {string} userId - User ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} User's uploaded tenders
+   */
+  async getUserUploadedTenders(userId, options = {}) {
+    const { limit = 10, offset = 0 } = options;
+
+    const query = `
+      SELECT 
+             ut.uploaded_tender_id,
+             ut.title,
+             ut.description,
+             ut.authority_name,
+             ut.sector,
+             ut.estimated_value,
+             ut.submission_deadline,
+             ut.word_count,
+             ut.opportunity_score,
+             ut.created_at,
+             ut.status,
+             o.name as organization_name,
+             u.name as uploaded_by_name
+      FROM uploaded_tender ut
+      LEFT JOIN organization o ON ut.organization_id = o.organization_id
+      LEFT JOIN "user" u ON ut.user_id = u.user_id
+      WHERE ut.user_id = $1
+      ORDER BY ut.created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+
+    const result = await pool.query(query, [userId, limit, offset]);
+    return result.rows.map(row => ({
+      id: row.uploaded_tender_id,
+      title: row.title,
+      description: row.description,
+      authorityName: row.authority_name,
+      sector: row.sector,
+      estimatedValue: row.estimated_value,
+      submissionDeadline: row.submission_deadline,
+      wordCount: row.word_count,
+      opportunityScore: row.opportunity_score,
+      createdAt: row.created_at,
+      status: row.status,
+      organizationName: row.organization_name || 'Your Organization',
+      uploadedByName: row.uploaded_by_name || 'You',
+      isUploaded: true
+    }));
+  },
+
+  /**
    * Get count of uploaded tenders
    * @param {Object} options - Filter options
    * @returns {Promise<number>} Count
@@ -226,9 +291,72 @@ export const UploadedTenderService = {
    * Update uploaded tender
    * @param {string} id - Tender ID
    * @param {Object} updates - Fields to update
+   * @param {string} userId - User ID for authorization
    * @returns {Promise<Object>} Updated record
    */
-  async update(id, updates) {
+  async update(id, updates, userId = null) {
+    // If full data object (from re-upload), handle specially
+    if (updates.parsedData && updates.analysisData) {
+      const { parsedData, analysisData, metadata = {}, fileSize, originalFilename } = updates;
+      
+      const authorityName = metadata.authority || parsedData?.metadata?.authority || null;
+      const referenceNumber = metadata.referenceNumber || parsedData?.metadata?.referenceNumber || null;
+      const sector = metadata.sector || parsedData?.metadata?.sector || null;
+      const estimatedValue = metadata.estimatedValue || parsedData?.metadata?.estimatedValue || null;
+      const submissionDeadline = metadata.deadline || parsedData?.metadata?.deadline || null;
+      const emdAmount = metadata.emdAmount || parsedData?.metadata?.emdAmount || null;
+      const wordCount = parsedData?.stats?.totalWords || 0;
+      const sectionCount = parsedData?.sections?.length || 0;
+      const opportunityScore = analysisData?.summary?.opportunityScore || 0;
+
+      const query = `
+        UPDATE uploaded_tender
+        SET 
+          parsed_data = $1,
+          analysis_data = $2,
+          authority_name = $3,
+          reference_number = $4,
+          sector = $5,
+          estimated_value = $6,
+          submission_deadline = $7,
+          emd_amount = $8,
+          word_count = $9,
+          section_count = $10,
+          opportunity_score = $11,
+          file_size = $12,
+          original_filename = $13,
+          status = 'ANALYZED',
+          analyzed_at = NOW(),
+          updated_at = NOW()
+        WHERE uploaded_tender_id = $14
+        ${userId ? 'AND user_id = $15' : ''}
+        RETURNING *
+      `;
+
+      const values = [
+        JSON.stringify(parsedData || {}),
+        JSON.stringify(analysisData || {}),
+        authorityName,
+        referenceNumber,
+        sector,
+        estimatedValue,
+        submissionDeadline ? new Date(submissionDeadline) : null,
+        emdAmount,
+        wordCount,
+        sectionCount,
+        opportunityScore,
+        fileSize || null,
+        originalFilename || null,
+        id
+      ];
+
+      if (userId) values.push(userId);
+
+      const result = await pool.query(query, values);
+      return this._transformRecord(result.rows[0]);
+    }
+
+    // Standard field updates
     const allowedFields = [
       'title', 'description', 'sector', 'estimated_value',
       'submission_deadline', 'analysis_data', 'status'
@@ -258,8 +386,11 @@ export const UploadedTenderService = {
       UPDATE uploaded_tender
       SET ${setClause.join(', ')}
       WHERE uploaded_tender_id = $${paramIndex}
+      ${userId ? `AND user_id = $${paramIndex + 1}` : ''}
       RETURNING *
     `;
+
+    if (userId) values.push(userId);
 
     const result = await pool.query(query, values);
     return this._transformRecord(result.rows[0]);
@@ -351,7 +482,7 @@ export const UploadedTenderService = {
       currency: 'INR',
       category: row.sector,
       organizationId: {
-        organizationName: row.organization_name || 'Uploaded',
+        organizationName: row.organization_name || 'Your Organization',
         industryDomain: row.sector || 'General',
       },
       createdAt: row.created_at,
@@ -359,7 +490,7 @@ export const UploadedTenderService = {
       // Additional fields to identify uploaded tenders
       isUploaded: true,
       source: row.source,
-      uploadedBy: row.uploaded_by_name,
+      uploadedBy: row.uploaded_by_name || 'You',
       authorityName: row.authority_name,
       wordCount: row.word_count,
       opportunityScore: row.opportunity_score,

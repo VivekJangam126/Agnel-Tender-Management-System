@@ -43,7 +43,7 @@ const BidderSidebar = ({ isOpen, setIsOpen }) => {
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-neutral-200">
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary-600 rounded-lg flex items-center justify-center">
+            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
               <Building2 className="h-5 w-5 text-white" />
             </div>
             <span className="font-semibold text-lg text-neutral-900 tracking-tight">
@@ -55,7 +55,7 @@ const BidderSidebar = ({ isOpen, setIsOpen }) => {
         {/* User Info */}
         <div className="px-4 py-3 border-b border-neutral-100">
           <div className="flex items-center gap-3 px-2">
-            <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-semibold">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-semibold">
               {user?.name ? user.name.charAt(0).toUpperCase() : 'B'}
             </div>
             <div className="flex-1 min-w-0">
@@ -85,11 +85,11 @@ const BidderSidebar = ({ isOpen, setIsOpen }) => {
                     onClick={() => setIsOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       active
-                        ? 'bg-primary-50 text-primary-700 border border-primary-100'
+                        ? 'bg-blue-50 text-blue-700 border border-blue-100'
                         : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
                     }`}
                   >
-                    <Icon className={`w-5 h-5 ${active ? 'text-primary-600' : 'text-neutral-400'}`} />
+                    <Icon className={`w-5 h-5 ${active ? 'text-blue-600' : 'text-neutral-400'}`} />
                     {item.label}
                   </Link>
                 </li>
