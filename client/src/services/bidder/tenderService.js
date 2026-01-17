@@ -3,13 +3,13 @@ import api from './api';
 export const tenderService = {
   // Discover tenders (for bidders)
   discoverTenders: async (params) => {
-    const response = await api.get('/bidder/tenders', { params });
+    const response = await api.get('/api/bidder/tenders', { params });
     return response;
   },
 
   // Get full tender details with sections (for bidders)
   getTenderFullDetails: async (id) => {
-    const response = await api.get(`/bidder/tenders/${id}`);
+    const response = await api.get(`/api/bidder/tenders/${id}`);
     return response;
   },
 
@@ -19,34 +19,34 @@ export const tenderService = {
 
   // Get all saved tenders
   getSavedTenders: async (params = {}) => {
-    const response = await api.get('/bidder/saved-tenders', { params });
+    const response = await api.get('/api/bidder/saved-tenders', { params });
     return response;
   },
 
   // Get saved tender IDs for quick lookup
   getSavedTenderIds: async () => {
-    const response = await api.get('/bidder/saved-tenders/ids');
+    const response = await api.get('/api/bidder/saved-tenders/ids');
     return response;
   },
 
   // Save a tender
   saveTender: async (tenderId, isUploaded = false) => {
     const body = isUploaded ? { uploadedTenderId: tenderId } : { tenderId };
-    const response = await api.post('/bidder/saved-tenders', body);
+    const response = await api.post('/api/bidder/saved-tenders', body);
     return response;
   },
 
   // Unsave a tender
   unsaveTender: async (tenderId, isUploaded = false) => {
     const body = isUploaded ? { uploadedTenderId: tenderId } : { tenderId };
-    const response = await api.delete('/bidder/saved-tenders', { data: body });
+    const response = await api.delete('/api/bidder/saved-tenders', { data: body });
     return response;
   },
 
   // Toggle save status
   toggleSaveTender: async (tenderId, isUploaded = false) => {
     const body = isUploaded ? { uploadedTenderId: tenderId } : { tenderId };
-    const response = await api.post('/bidder/saved-tenders/toggle', body);
+    const response = await api.post('/api/bidder/saved-tenders/toggle', body);
     return response;
   },
 

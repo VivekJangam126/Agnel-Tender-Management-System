@@ -32,7 +32,11 @@ const PROVIDER_CONFIGS = {
     apiKey: () => env.OPENAI_API_KEY,
     format: 'openai',
   },
+
 };
+
+// Proxy export for compatibility
+export const callLLM = (...args) => LLMCaller.call(...args);
 
 export const LLMCaller = {
   /**
