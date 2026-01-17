@@ -25,6 +25,15 @@ export const UploadedTenderService = {
       metadata = {},
     } = data;
 
+    console.log('[UploadedTender] create called with:', {
+      title,
+      userId,
+      organizationId,
+      hasDescription: !!description,
+      hasParsedData: !!parsedData,
+      hasAnalysisData: !!analysisData
+    });
+
     // Check for existing tender with same title by this user (prevent duplicates)
     const existingCheck = await pool.query(
       `SELECT uploaded_tender_id FROM uploaded_tender 
@@ -99,8 +108,22 @@ export const UploadedTenderService = {
       opportunityScore,
     ];
 
-    const result = await pool.query(query, values);
-    return this._transformRecord(result.rows[0]);
+    console.log('[UploadedTender] Inserting with values:', {
+      organizationId,
+      userId,
+      title,
+      hasDescription: !!description,
+    });
+
+    try {
+      const result = await pool.query(query, values);
+      console.log('[UploadedTender] Insert successful:', result.rows[0].uploaded_tender_id);
+      return this._transformRecord(result.rows[0]);
+    } catch (dbError) {
+      console.error('[UploadedTender] Database error:', dbError.message);
+      console.error('[UploadedTender] Error detail:', dbError.detail);
+      throw dbError;
+    }
   },
 
   /**

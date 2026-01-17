@@ -1330,6 +1330,18 @@ router.post('/uploaded-tenders', requireAuth, requireRole('BIDDER'), async (req,
       return res.status(400).json({ error: 'title is required' });
     }
 
+    // Validate user authentication data
+    if (!req.user || !req.user.userId || !req.user.organizationId) {
+      console.error('[Bidder] Missing auth data:', req.user);
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    console.log('[Bidder] Creating uploaded tender:', { 
+      title, 
+      userId: req.user.userId, 
+      organizationId: req.user.organizationId 
+    });
+
     const created = await UploadedTenderService.create(
       {
         title,
