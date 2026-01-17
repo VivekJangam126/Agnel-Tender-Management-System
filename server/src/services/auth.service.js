@@ -7,10 +7,15 @@ const SALT_ROUNDS = 10;
 const TOKEN_EXPIRY = '24h';
 
 export const AuthService = {
-  async signup({ name, email, password, role, organizationName }) {
+  async signup({ name, email, password, role, organizationName, specialty }) {
     // Validate role
-    if (!['AUTHORITY', 'BIDDER'].includes(role)) {
-      throw new Error('Invalid role. Must be AUTHORITY or BIDDER');
+    if (!['AUTHORITY', 'BIDDER', 'REVIEWER'].includes(role)) {
+      throw new Error('Invalid role. Must be AUTHORITY, BIDDER, or REVIEWER');
+    }
+
+    // Validate specialty for REVIEWER role
+    if (role === 'REVIEWER' && !specialty) {
+      throw new Error('Specialty is required for Reviewer role');
     }
 
     // Check if user already exists
@@ -23,20 +28,21 @@ export const AuthService = {
       throw new Error('Email already registered');
     }
 
-    // Create organization
+    // Create organization (for REVIEWER, use specialty as org name if no org provided)
+    const orgName = organizationName || (role === 'REVIEWER' ? `${name} - ${specialty}` : name);
     const orgResult = await pool.query(
       'INSERT INTO organization (name, type) VALUES ($1, $2) RETURNING organization_id',
-      [organizationName, role]
+      [orgName, role]
     );
     const organizationId = orgResult.rows[0].organization_id;
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // Create user
+    // Create user with specialty if REVIEWER
     const userResult = await pool.query(
-      'INSERT INTO "user" (name, email, password_hash, role, organization_id) VALUES ($1, $2, $3, $4, $5) RETURNING user_id, name, email, role, organization_id',
-      [name, email, passwordHash, role, organizationId]
+      'INSERT INTO "user" (name, email, password_hash, role, organization_id, specialty) VALUES ($1, $2, $3, $4, $5, $6) RETURNING user_id, name, email, role, organization_id, specialty',
+      [name, email, passwordHash, role, organizationId, role === 'REVIEWER' ? specialty : null]
     );
 
     const user = userResult.rows[0];
@@ -59,16 +65,17 @@ export const AuthService = {
         name: user.name,
         email: user.email,
         role: user.role.toLowerCase(),
-        organization: organizationName,
+        organization: orgName,
         organizationId: user.organization_id,
+        specialty: user.specialty,
       },
     };
   },
 
   async login(email, password) {
-    // Find user with organization
+    // Find user with organization and specialty
     const result = await pool.query(
-      `SELECT u.user_id, u.name, u.email, u.password_hash, u.role, u.organization_id, o.name as organization_name
+      `SELECT u.user_id, u.name, u.email, u.password_hash, u.role, u.organization_id, u.specialty, o.name as organization_name
        FROM "user" u
        JOIN organization o ON u.organization_id = o.organization_id
        WHERE u.email = $1`,
@@ -107,6 +114,7 @@ export const AuthService = {
         role: user.role.toLowerCase(),
         organization: user.organization_name,
         organizationId: user.organization_id,
+        specialty: user.specialty,
       },
     };
   },
