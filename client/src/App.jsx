@@ -27,7 +27,7 @@ import ProposalWorkspace from "./pages/bidder/ProposalWorkspace";
 import ProposalPublishedView from "./pages/bidder/ProposalPublishedView";
 import ProposalDrafting from "./pages/bidder/ProposalDrafting";
 import BidderHistory from "./pages/bidder/BidderHistory";
-import AnalyzePage from "./pages/bidder/AnalyzePage";
+
 import SavedTendersPage from "./pages/bidder/SavedTendersPage";
 import BidderProfile from "./pages/bidder/BidderProfile";
 import PDFTenderAnalysis from "./pages/bidder/PDFTenderAnalysis";
@@ -85,7 +85,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={["bidder"]} />}>
             <Route path="/bidder/dashboard" element={<BidderDashboard />} />
             <Route path="/bidder/tenders" element={<BidderTenderDiscovery />} />
-            <Route path="/bidder/analyze" element={<AnalyzePage />} />
+           
             <Route path="/bidder/tenders/:id/analyze" element={<TenderAnalysis />} />
             <Route path="/bidder/proposals/:id" element={<ProposalEdit />} />
             <Route path="/bidder/proposal/:tenderId" element={<ProposalWorkspace />} />

@@ -30,6 +30,8 @@ const bidderMenu = [
   { label: "Proposal Drafting", href: "/bidder/proposal-drafting", icon: FileCheck, rootPath: "/bidder/proposal-drafting" },
   { label: "History", href: "/bidder/history", icon: Clock, rootPath: "/bidder/history" },
   { label: "Profile", href: "/bidder/profile", icon: Settings, rootPath: "/bidder/profile" },
+    { label: "Profile", href: "/bidder/profile", icon: Settings, rootPath: "/bidder/profile" },
+  
 ];
 
 /**

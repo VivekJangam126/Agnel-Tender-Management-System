@@ -31,7 +31,7 @@ import { proposalService } from '../../services/bidder/proposalService';
 import proposalExportService from '../../services/bidder/proposalExportService';
 
 // Icons
-import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard } from 'lucide-react';
+import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard, FileText } from 'lucide-react';
 
 // Styles
 import '../../styles/proposal-theme.css';
@@ -447,6 +447,16 @@ export default function ProposalWorkspace() {
                 disabled={isProposalSubmitted}
                 isExporting={isExporting}
               />
+
+              {/* PDF Analyze & Collaboration */}
+              <button
+                onClick={() => navigate(`/bidder/pdf-analyze?tenderId=${tenderId}&proposalId=${proposalId}`)}
+                className="flex items-center gap-2 px-3 py-2 text-white bg-primary-600 hover:bg-primary-700 rounded-lg text-sm font-medium transition"
+                title="Open PDF Analyze & Collaboration"
+              >
+                <FileText className="w-4 h-4" />
+                PDF Analyze
+              </button>
 
               {/* Theme Toggle */}
               <ThemeToggle variant="icon" size="sm" />
