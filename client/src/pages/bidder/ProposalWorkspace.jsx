@@ -32,8 +32,8 @@ import { proposalService } from '../../services/bidder/proposalService';
 import proposalExportService from '../../services/bidder/proposalExportService';
 
 // Icons
-import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard, FileText } from 'lucide-react';
-import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard, Shield, Clock } from 'lucide-react';
+
+import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard, Shield, Clock,FileText } from 'lucide-react';
 
 // Insight Components
 import { RiskScoreCard, AuditTrail } from '../../components/insights';
