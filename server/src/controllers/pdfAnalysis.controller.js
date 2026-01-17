@@ -1,8 +1,10 @@
 /**
  * PDF Analysis Controller
  * Handles PDF upload, analysis, and proposal evaluation
+ * UPDATED: Multi-step evaluation with minimal payload
  */
 import { PDFAnalysisService } from '../services/pdfAnalysis.service.js';
+import { MultiStepEvaluationService } from '../services/multiStepEvaluation.service.js';
 
 export const PDFAnalysisController = {
   /**
@@ -68,11 +70,21 @@ export const PDFAnalysisController = {
   /**
    * Evaluate a proposal against tender requirements
    * POST /api/pdf/evaluate
+   * UPDATED: Accepts minimal payload {sessionId, proposal: {sections}}
    */
   async evaluateProposal(req, res) {
     try {
-      const { proposal, tenderAnalysis } = req.body;
+      const { sessionId, proposal, tenderId } = req.body;
 
+      // Validate sessionId (required for backend-driven evaluation)
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Session ID is required for evaluation.',
+        });
+      }
+
+      // Validate minimal proposal data
       if (!proposal || !proposal.sections || !Array.isArray(proposal.sections)) {
         return res.status(400).json({
           success: false,
@@ -80,16 +92,22 @@ export const PDFAnalysisController = {
         });
       }
 
-      if (!tenderAnalysis) {
-        return res.status(400).json({
-          success: false,
-          error: 'Tender analysis data required for evaluation.',
-        });
+      // Check payload size (should be minimal now)
+      const payloadSize = JSON.stringify(req.body).length;
+      console.log(`[Proposal Evaluation] Payload size: ${(payloadSize / 1024).toFixed(1)}KB`);
+
+      if (payloadSize > 500000) { // 500KB warning threshold
+        console.warn(`[Proposal Evaluation] Large payload detected: ${(payloadSize / 1024).toFixed(1)}KB`);
       }
 
-      console.log(`[Proposal Evaluation] Evaluating ${proposal.sections.length} sections`);
+      console.log(`[Proposal Evaluation] Session: ${sessionId}, Sections: ${proposal.sections.length}`);
 
-      const evaluation = await PDFAnalysisService.evaluateProposal(proposal, tenderAnalysis);
+      // Use multi-step evaluation service
+      const evaluation = await MultiStepEvaluationService.evaluateProposal(
+        sessionId,
+        proposal,
+        tenderId
+      );
 
       return res.json({
         success: true,
@@ -97,6 +115,15 @@ export const PDFAnalysisController = {
       });
     } catch (err) {
       console.error('[Proposal Evaluation] Error:', err);
+      
+      // Check for specific error types
+      if (err.message?.includes('token limit')) {
+        return res.status(422).json({
+          success: false,
+          error: 'Content too large for evaluation. Please reduce proposal size.',
+        });
+      }
+
       return res.status(500).json({
         success: false,
         error: err.message || 'Internal server error during evaluation',
