@@ -173,7 +173,7 @@ export const PermissionService = {
       `SELECT 1
        FROM uploaded_tender ut
        JOIN "user" u ON ut.organization_id = u.organization_id
-       WHERE ut.id = $1 AND u.user_id = $2`,
+       WHERE ut.uploaded_tender_id = $1 AND u.user_id = $2`,
       [uploadedTenderId, userId]
     );
 
@@ -204,7 +204,7 @@ export const PermissionService = {
       `SELECT 1
        FROM uploaded_tender ut
        JOIN "user" u ON ut.organization_id = u.organization_id
-       WHERE ut.id = $1 AND u.user_id = $2`,
+       WHERE ut.uploaded_tender_id = $1 AND u.user_id = $2`,
       [uploadedTenderId, userId]
     );
 

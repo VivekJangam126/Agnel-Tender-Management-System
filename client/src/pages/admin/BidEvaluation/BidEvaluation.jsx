@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import useAuth from "../../../hooks/useAuth";
 import { evaluationService } from "../../../services/evaluationService";
-import { ChevronLeft, Download, Check, X, AlertCircle } from "lucide-react";
+import { ChevronLeft, Download, Check, X, AlertCircle, Sparkles, TrendingUp, Shield, FileText, Loader } from "lucide-react";
 
 export default function BidEvaluation() {
   const { tenderId } = useParams();
@@ -22,6 +22,11 @@ export default function BidEvaluation() {
     technical_score: "",
     remarks: "",
   });
+
+  // AI Evaluation state
+  const [aiEvaluation, setAiEvaluation] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   useEffect(() => {
     async function loadData() {
@@ -50,8 +55,36 @@ export default function BidEvaluation() {
         technical_score: selectedBid.technical_score || "",
         remarks: selectedBid.remarks || "",
       });
+      // Reset AI evaluation when bid changes
+      setAiEvaluation(null);
+      setAiError(null);
     }
   }, [selectedBid]);
+
+  // Fetch AI evaluation for selected bid
+  const fetchAIEvaluation = async () => {
+    if (!selectedBid) return;
+
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      const result = await evaluationService.getAIEvaluationScore(selectedBid.proposal_id, token);
+      setAiEvaluation(result.aiEvaluation);
+
+      // Optionally pre-fill score if not already set
+      if (!evaluationForm.technical_score && result.aiEvaluation?.overallScore) {
+        setEvaluationForm(prev => ({
+          ...prev,
+          technical_score: result.aiEvaluation.overallScore.toString()
+        }));
+      }
+    } catch (err) {
+      setAiError(err.message || "Failed to get AI evaluation");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleEvaluationSubmit = async () => {
     if (!selectedBid) return;
@@ -224,6 +257,131 @@ export default function BidEvaluation() {
                       <p className="text-sm text-neutral-700">{selectedBid.remarks}</p>
                     </div>
                   )}
+
+                  {/* AI Evaluation Section */}
+                  <div className="pt-4 border-t border-neutral-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-600" />
+                        <h4 className="text-sm font-semibold text-neutral-900">AI Evaluation</h4>
+                      </div>
+                      <button
+                        onClick={fetchAIEvaluation}
+                        disabled={aiLoading}
+                        className="px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 transition-colors"
+                      >
+                        {aiLoading ? (
+                          <span className="flex items-center gap-1">
+                            <Loader className="w-3 h-3 animate-spin" />
+                            Analyzing...
+                          </span>
+                        ) : aiEvaluation ? "Re-analyze" : "Get AI Score"}
+                      </button>
+                    </div>
+
+                    {aiError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 mb-4">
+                        <AlertCircle className="w-3 h-3 inline mr-1" />
+                        {aiError}
+                      </div>
+                    )}
+
+                    {aiEvaluation && (
+                      <div className="space-y-4">
+                        {/* Overall Score */}
+                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-purple-700">Overall AI Score</span>
+                            <span className={`text-2xl font-bold ${
+                              aiEvaluation.overallScore >= 70 ? 'text-green-600' :
+                              aiEvaluation.overallScore >= 50 ? 'text-amber-600' : 'text-red-600'
+                            }`}>
+                              {aiEvaluation.overallScore}/100
+                            </span>
+                          </div>
+                          <div className="w-full bg-purple-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full transition-all ${
+                                aiEvaluation.overallScore >= 70 ? 'bg-green-500' :
+                                aiEvaluation.overallScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${aiEvaluation.overallScore}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Win Probability */}
+                        <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg">
+                          <TrendingUp className={`w-5 h-5 ${
+                            aiEvaluation.winProbability === 'High' ? 'text-green-600' :
+                            aiEvaluation.winProbability === 'Medium-High' ? 'text-emerald-600' :
+                            aiEvaluation.winProbability === 'Medium' ? 'text-amber-600' : 'text-red-600'
+                          }`} />
+                          <div>
+                            <p className="text-xs text-neutral-500">Win Probability</p>
+                            <p className="text-sm font-semibold text-neutral-900">{aiEvaluation.winProbability}</p>
+                          </div>
+                        </div>
+
+                        {/* Score Breakdown */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {aiEvaluation.scores && Object.entries(aiEvaluation.scores).map(([key, value]) => (
+                            <div key={key} className="p-2 bg-neutral-50 rounded-lg">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                {key === 'compliance' && <Shield className="w-3 h-3 text-blue-600" />}
+                                {key === 'technical' && <FileText className="w-3 h-3 text-purple-600" />}
+                                {key === 'financial' && <TrendingUp className="w-3 h-3 text-green-600" />}
+                                {key === 'presentation' && <FileText className="w-3 h-3 text-amber-600" />}
+                                {key === 'completeness' && <Check className="w-3 h-3 text-emerald-600" />}
+                                <span className="text-xs text-neutral-600 capitalize">{key}</span>
+                              </div>
+                              <p className="text-sm font-semibold text-neutral-900">{value.score}/100</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Strengths & Weaknesses */}
+                        {aiEvaluation.strengths?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-green-700 mb-1">Strengths</p>
+                            <ul className="text-xs text-neutral-600 space-y-1">
+                              {aiEvaluation.strengths.slice(0, 3).map((s, i) => (
+                                <li key={i} className="flex items-start gap-1">
+                                  <Check className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                                  <span>{s}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {aiEvaluation.weaknesses?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-red-700 mb-1">Areas of Concern</p>
+                            <ul className="text-xs text-neutral-600 space-y-1">
+                              {aiEvaluation.weaknesses.slice(0, 3).map((w, i) => (
+                                <li key={i} className="flex items-start gap-1">
+                                  <X className="w-3 h-3 text-red-500 mt-0.5 flex-shrink-0" />
+                                  <span>{w}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Assessment */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800">{aiEvaluation.overallAssessment}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {!aiEvaluation && !aiLoading && !aiError && (
+                      <p className="text-xs text-neutral-500 text-center py-4">
+                        Click "Get AI Score" to analyze this bid using AI
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-neutral-500">No bid selected</p>

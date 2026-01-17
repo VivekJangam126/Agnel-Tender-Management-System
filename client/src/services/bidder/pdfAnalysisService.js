@@ -100,6 +100,30 @@ export const pdfAnalysisService = {
   },
 
   // ==========================================
+  // UPLOADED TENDERS
+  // ==========================================
+
+  /**
+   * Get uploaded tender by ID
+   * @param {string} uploadedTenderId - Uploaded tender ID
+   * @returns {Promise<Object>} Uploaded tender data
+   */
+  async getUploadedTender(uploadedTenderId) {
+    const response = await api.get(`/bidder/uploaded-tenders/${uploadedTenderId}`);
+    return response.data;
+  },
+
+  /**
+   * Get proposal draft by uploaded tender ID (alias for consistency)
+   * @param {string} uploadedTenderId - Uploaded tender ID
+   * @returns {Promise<Object>} Draft data
+   */
+  async getProposalDraft(uploadedTenderId) {
+    const response = await api.get(`/bidder/uploaded-proposal-drafts/tender/${uploadedTenderId}`);
+    return response.data;
+  },
+
+  // ==========================================
   // UPLOADED PROPOSAL DRAFTS
   // ==========================================
 

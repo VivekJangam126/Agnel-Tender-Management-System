@@ -8,6 +8,8 @@ import { MultiStepEvaluationService } from '../services/multiStepEvaluation.serv
 import { UploadedTenderService } from '../services/uploadedTender.service.js';
 import { SavedTenderService } from '../services/savedTender.service.js';
 import { ProposalPdfExportService } from '../services/proposalPdfExport.service.js';
+import { CollaborativeDrafterService } from '../services/collaborativeDrafter.service.js';
+import { UploadedProposalDraftService } from '../services/uploadedProposalDraft.service.js';
 import { pool } from '../config/db.js';
 
 export const PDFAnalysisController = {
@@ -107,6 +109,34 @@ export const PDFAnalysisController = {
             console.log(`[PDF Analysis] Auto-saved to user's saved tenders`);
           } catch (autoSaveErr) {
             console.error('[PDF Analysis] Failed to auto-save:', autoSaveErr.message);
+          }
+
+          // Generate and save initial proposal content immediately after analysis
+          // This ensures content is ready when user navigates to drafting page
+          try {
+            console.log(`[PDF Analysis] Generating initial proposal content for tender ${savedTender.id}...`);
+
+            const initialContent = await CollaborativeDrafterService.generateInitialProposalContent(
+              savedTender.id,
+              req.user.id
+            );
+
+            if (initialContent?.sections && initialContent.sections.length > 0) {
+              // Save the generated content as a draft
+              await UploadedProposalDraftService.upsert(
+                {
+                  uploadedTenderId: savedTender.id,
+                  sections: initialContent.sections,
+                  title: analysis.parsed.title || req.file.originalname.replace('.pdf', ''),
+                },
+                req.user.id,
+                req.user.organizationId
+              );
+              console.log(`[PDF Analysis] Initial proposal content saved: ${initialContent.sections.length} sections`);
+            }
+          } catch (contentErr) {
+            // Log but don't fail - user can still generate content later
+            console.error('[PDF Analysis] Failed to generate initial content:', contentErr.message);
           }
         }
       } catch (saveErr) {

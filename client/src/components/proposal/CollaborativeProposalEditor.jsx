@@ -2,7 +2,7 @@
  * Collaborative Proposal Editor
  * Enhanced editor with collaboration features:
  * - Permission-based editing (read-only for insufficient permissions)
- * - AI draft generation
+ * - AI draft generation with insights panel
  * - Assigned users display
  * - Last edited info
  * - Comment panel integration
@@ -21,6 +21,11 @@ import {
   ChevronRight,
   CheckCircle,
   AlertCircle,
+  X,
+  Copy,
+  Check,
+  FileText,
+  Lightbulb,
 } from 'lucide-react';
 import { useCollaboration } from '../../context/CollaborationContext';
 import UserAssignmentModal from './UserAssignmentModal';
@@ -53,7 +58,13 @@ export default function CollaborativeProposalEditor({
   const [customInstructions, setCustomInstructions] = useState('');
   const [showInstructionsInput, setShowInstructionsInput] = useState(false);
 
-  const sectionId = section?.section_id || section?._id || section?.id;
+  // AI Insights Panel State
+  const [showInsightsPanel, setShowInsightsPanel] = useState(false);
+  const [aiGeneratedDraft, setAiGeneratedDraft] = useState(null);
+  const [aiDraftMeta, setAiDraftMeta] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const sectionId = section?.section_id || section?._id || section?.id || section?.key;
   const sectionTitle = section?.title || section?.sectionTitle || section?.name || 'Untitled Section';
 
   // Permissions
@@ -68,26 +79,27 @@ export default function CollaborativeProposalEditor({
   );
   const lastEdit = lastEdits[sectionId];
 
-  // Handle AI draft generation
+  // Handle AI draft generation - now shows in insights panel
   const handleGenerateDraft = useCallback(async () => {
     if (!canEdit || generatingDraft) return;
 
     setGeneratingDraft(true);
     setDraftError(null);
+    setAiGeneratedDraft(null);
+    setAiDraftMeta(null);
 
     try {
       const result = await generateDraft(sectionId, customInstructions);
 
       if (result?.draft) {
-        // Confirm before replacing
-        if (content && content.trim().length > 50) {
-          const confirmed = confirm(
-            'This will replace your current content with the AI-generated draft. Continue?'
-          );
-          if (!confirmed) return;
-        }
-
-        onContentChange(result.draft);
+        setAiGeneratedDraft(result.draft);
+        setAiDraftMeta({
+          wordCount: result.wordCount,
+          sectionType: result.sectionType,
+          suggestedStructure: result.suggestedStructure || [],
+          disclaimer: result.disclaimer,
+        });
+        setShowInsightsPanel(true);
         setShowInstructionsInput(false);
         setCustomInstructions('');
       }
@@ -97,7 +109,42 @@ export default function CollaborativeProposalEditor({
     } finally {
       setGeneratingDraft(false);
     }
-  }, [sectionId, canEdit, generatingDraft, customInstructions, content, generateDraft, onContentChange]);
+  }, [sectionId, canEdit, generatingDraft, customInstructions, generateDraft]);
+
+  // Apply AI draft to editor
+  const handleApplyDraft = useCallback(() => {
+    if (!aiGeneratedDraft) return;
+
+    // If there's existing content, confirm replacement
+    if (content && content.trim().length > 50) {
+      const confirmed = confirm(
+        'This will replace your current content with the AI-generated draft. Continue?'
+      );
+      if (!confirmed) return;
+    }
+
+    onContentChange(aiGeneratedDraft);
+    setShowInsightsPanel(false);
+    setAiGeneratedDraft(null);
+    setAiDraftMeta(null);
+  }, [aiGeneratedDraft, content, onContentChange]);
+
+  // Copy AI draft to clipboard
+  const handleCopyDraft = useCallback(async () => {
+    if (!aiGeneratedDraft) return;
+    try {
+      await navigator.clipboard.writeText(aiGeneratedDraft);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  }, [aiGeneratedDraft]);
+
+  // Close insights panel
+  const handleCloseInsights = useCallback(() => {
+    setShowInsightsPanel(false);
+  }, []);
 
   // Handle content change
   const handleContentChange = useCallback((e) => {
@@ -259,23 +306,36 @@ export default function CollaborativeProposalEditor({
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowInstructionsInput(true)}
-                  disabled={generatingDraft}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-blue-400 disabled:to-indigo-400 text-white font-medium rounded-lg transition-all shadow-sm"
-                >
-                  {generatingDraft ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating AI Draft...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Generate AI Draft
-                    </>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowInstructionsInput(true)}
+                    disabled={generatingDraft}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-blue-400 disabled:to-indigo-400 text-white font-medium rounded-lg transition-all shadow-sm"
+                  >
+                    {generatingDraft ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Generating AI Draft...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Generate AI Draft
+                      </>
+                    )}
+                  </button>
+
+                  {/* Show AI Insights button if draft exists */}
+                  {aiGeneratedDraft && !showInsightsPanel && (
+                    <button
+                      onClick={() => setShowInsightsPanel(true)}
+                      className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium rounded-lg transition-colors"
+                    >
+                      <Lightbulb className="w-4 h-4" />
+                      View AI Insights
+                    </button>
                   )}
-                </button>
+                </div>
               )}
 
               {/* Draft error */}
@@ -352,6 +412,107 @@ export default function CollaborativeProposalEditor({
           )}
         </div>
       </div>
+
+      {/* AI Insights Panel (collapsible right panel) */}
+      {showInsightsPanel && aiGeneratedDraft && (
+        <div className="w-[420px] flex-shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-amber-50 to-orange-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-5 h-5 text-amber-600" />
+                <h3 className="font-semibold text-slate-900">AI Insights</h3>
+              </div>
+              <button
+                onClick={handleCloseInsights}
+                className="p-1 hover:bg-slate-200 rounded transition-colors"
+              >
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            {aiDraftMeta && (
+              <p className="text-xs text-slate-600 mt-1">
+                {aiDraftMeta.wordCount} words | {aiDraftMeta.sectionType} section
+              </p>
+            )}
+          </div>
+
+          {/* Suggested Structure */}
+          {aiDraftMeta?.suggestedStructure?.length > 0 && (
+            <div className="px-4 py-3 border-b border-slate-200 bg-blue-50">
+              <h4 className="text-xs font-medium text-blue-800 uppercase tracking-wide mb-2">
+                Suggested Structure
+              </h4>
+              <ul className="space-y-1">
+                {aiDraftMeta.suggestedStructure.map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-xs text-blue-700">
+                    <span className="w-4 h-4 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-medium">
+                      {idx + 1}
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Generated Draft Preview */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                <FileText className="w-4 h-4" />
+                Generated Draft
+              </h4>
+              <button
+                onClick={handleCopyDraft}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                title="Copy to clipboard"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3 h-3 text-green-500" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto">
+              {aiGeneratedDraft}
+            </div>
+
+            {/* Disclaimer */}
+            {aiDraftMeta?.disclaimer && (
+              <p className="mt-3 text-xs text-slate-500 italic">
+                {aiDraftMeta.disclaimer}
+              </p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="px-4 py-3 border-t border-slate-200 bg-slate-50">
+            <div className="flex gap-2">
+              <button
+                onClick={handleCloseInsights}
+                className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyDraft}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Check className="w-4 h-4" />
+                Apply to Editor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Comments Panel (collapsible) */}
       {showComments && (

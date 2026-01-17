@@ -26,16 +26,17 @@ const router = Router();
 
 /**
  * GET /api/collaboration/users/search
- * Search users by email within the same organization
- * Query params: email (min 3 chars)
+ * Search users by email or name
+ * Query params: email (min 2 chars) - searches both email and name
+ * Returns: same org users + ASSISTER/REVIEWER from any org
  */
 router.get('/users/search', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
     const { email } = req.query;
 
-    if (!email || email.length < 3) {
+    if (!email || email.length < 2) {
       return res.status(400).json({
-        error: 'Email search requires at least 3 characters',
+        error: 'Search requires at least 2 characters',
       });
     }
 
@@ -646,6 +647,42 @@ router.post(
 // ==========================================
 // UPLOADED TENDER - AI DRAFTING
 // ==========================================
+
+/**
+ * POST /api/collaboration/uploaded-tenders/:uploadedTenderId/generate-initial-content
+ * Generate initial AI content for all proposal sections
+ * Called when user first opens proposal drafting for an uploaded tender
+ */
+router.post(
+  '/uploaded-tenders/:uploadedTenderId/generate-initial-content',
+  requireAuth,
+  requireRole('BIDDER'),
+  requireUploadedTenderOwner(),
+  aiRateLimiter,
+  async (req, res, next) => {
+    try {
+      const { uploadedTenderId } = req.params;
+
+      console.log(`[Generate Initial Content] Starting for tender ${uploadedTenderId}`);
+
+      const result = await CollaborativeDrafterService.generateInitialProposalContent(
+        uploadedTenderId,
+        req.user.id
+      );
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      console.error('[Generate Initial Content] Error:', err.message);
+      if (err.message.includes('not found')) {
+        return res.status(404).json({ error: err.message });
+      }
+      next(err);
+    }
+  }
+);
 
 /**
  * POST /api/collaboration/uploaded-tenders/:uploadedTenderId/sections/:sectionKey/generate-draft

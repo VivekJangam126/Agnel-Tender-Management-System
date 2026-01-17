@@ -455,6 +455,11 @@ export const UploadedTenderService = {
       record.analysisData = typeof row.analysis_data === 'string'
         ? JSON.parse(row.analysis_data)
         : row.analysis_data;
+
+      // Extract normalizedSections for easy access in frontend
+      if (record.analysisData?.normalizedSections) {
+        record.normalizedSections = record.analysisData.normalizedSections;
+      }
     }
 
     return record;

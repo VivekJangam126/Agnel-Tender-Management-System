@@ -241,6 +241,19 @@ export const collaborationService = {
   // ==========================================
 
   /**
+   * Generate initial AI content for all proposal sections
+   * Called when user first opens proposal drafting for an uploaded tender with no existing draft
+   * @param {string} uploadedTenderId
+   * @returns {Promise<Object>} { sections: [{key, content}], tenderContext }
+   */
+  async generateInitialContent(uploadedTenderId) {
+    const response = await api.post(
+      `/collaboration/uploaded-tenders/${uploadedTenderId}/generate-initial-content`
+    );
+    return response.data?.data;
+  },
+
+  /**
    * Generate AI draft for uploaded tender section
    */
   async generateUploadedDraft(uploadedTenderId, sectionKey, customInstructions = '') {

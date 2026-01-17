@@ -13,16 +13,53 @@ export const UploadedProposalDraftService = {
    * @returns {Promise<Object>} Created/updated draft
    */
   async upsert(data, userId, organizationId) {
-    const { uploadedTenderId, sections, title } = data;
+    const { uploadedTenderId, sections: newSections, title } = data;
 
     if (!uploadedTenderId) {
       throw new Error('uploadedTenderId is required');
     }
 
-    // Calculate metadata
-    const totalSections = sections?.length || 0;
-    const totalWords = sections?.reduce((sum, s) => sum + (s.wordCount || 0), 0) || 0;
-    const completedSections = sections?.filter(s => s.content && s.content.trim().length >= 50).length || 0;
+    // First, get existing draft to merge sections
+    const existingResult = await pool.query(
+      `SELECT sections FROM uploaded_proposal_draft
+       WHERE uploaded_tender_id = $1 AND user_id = $2`,
+      [uploadedTenderId, userId]
+    );
+
+    let mergedSections = [];
+
+    if (existingResult.rows.length > 0) {
+      // Parse existing sections
+      const existingSections = typeof existingResult.rows[0].sections === 'string'
+        ? JSON.parse(existingResult.rows[0].sections)
+        : existingResult.rows[0].sections || [];
+
+      // Create a map of existing sections by key
+      const sectionMap = new Map();
+      existingSections.forEach(s => {
+        if (s.key) sectionMap.set(s.key, s);
+      });
+
+      // Update/add new sections
+      if (newSections && newSections.length > 0) {
+        newSections.forEach(s => {
+          if (s.key) sectionMap.set(s.key, { ...sectionMap.get(s.key), ...s });
+        });
+      }
+
+      mergedSections = Array.from(sectionMap.values());
+    } else {
+      // No existing draft, use new sections as-is
+      mergedSections = newSections || [];
+    }
+
+    // Calculate metadata from merged sections
+    const totalSections = mergedSections.length;
+    const totalWords = mergedSections.reduce((sum, s) => {
+      const content = s.content || '';
+      return sum + content.split(/\s+/).filter(w => w).length;
+    }, 0);
+    const completedSections = mergedSections.filter(s => s.content && s.content.trim().length >= 50).length;
     const completionPercent = totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0;
 
     const query = `
@@ -52,7 +89,7 @@ export const UploadedProposalDraftService = {
       uploadedTenderId,
       userId,
       organizationId,
-      JSON.stringify(sections || []),
+      JSON.stringify(mergedSections),
       title || null,
       totalSections,
       totalWords,

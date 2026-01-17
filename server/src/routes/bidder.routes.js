@@ -712,7 +712,7 @@ router.post('/proposals', requireAuth, requireRole('BIDDER'), async (req, res, n
     const proposalData = await ProposalService.createProposalDraft(tenderId, req.user);
 
     // Log audit action (non-blocking)
-    AuditLogService.logProposalCreate(proposalData.proposal_id, req.user.userId, tenderId, req).catch(() => {});
+    AuditLogService.logProposalCreate(proposalData.proposal_id, req.user.id, tenderId, req).catch(() => {});
 
     // Transform to Omkar's expected format
     const proposal = {
@@ -920,7 +920,7 @@ router.put('/proposals/:id/sections/:sectionId', requireAuth, requireRole('BIDDE
     const response = await ProposalService.upsertSectionResponse(id, sectionId, content, req.user);
 
     // Log audit action (non-blocking)
-    AuditLogService.logSectionEdit(id, req.user.userId, sectionId, null, req).catch(() => {});
+    AuditLogService.logSectionEdit(id, req.user.id, sectionId, null, req).catch(() => {});
 
     res.json(response);
   } catch (err) {
@@ -942,7 +942,7 @@ router.post('/proposals/:id/submit', requireAuth, requireRole('BIDDER'), async (
     const proposalData = await ProposalService.submitProposal(id, req.user);
 
     // Log audit action (non-blocking)
-    AuditLogService.logProposalSubmit(id, req.user.userId, req).catch(() => {});
+    AuditLogService.logProposalSubmit(id, req.user.id, req).catch(() => {});
 
     // Transform to Omkar's expected format
     const proposal = {
@@ -1080,7 +1080,7 @@ router.get('/proposals/:id/export', requireAuth, requireRole('BIDDER'), async (r
     }
 
     // Log audit action (non-blocking)
-    AuditLogService.logProposalExport(id, req.user.userId, format, template, req).catch(() => {});
+    AuditLogService.logProposalExport(id, req.user.id, format, template, req).catch(() => {});
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -1298,7 +1298,7 @@ router.get('/proposals/:id/versions/:versionNumber', requireAuth, requireRole('B
 router.get('/uploaded-tenders/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const tender = await UploadedTenderService.getById(id, req.user.userId);
+    const tender = await UploadedTenderService.getById(id, req.user.id);
 
     if (!tender) {
       return res.status(404).json({ error: 'Uploaded tender not found' });
@@ -1351,7 +1351,7 @@ router.get('/uploaded-tenders', requireAuth, requireRole('BIDDER'), async (req, 
 router.delete('/uploaded-tenders/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deleted = await UploadedTenderService.delete(id, req.user.userId);
+    const deleted = await UploadedTenderService.delete(id, req.user.id);
 
     if (!deleted) {
       return res.status(404).json({ error: 'Uploaded tender not found or unauthorized' });
@@ -1379,11 +1379,11 @@ router.get('/saved-tenders', requireAuth, requireRole('BIDDER'), async (req, res
     const { limit = 50, offset = 0 } = req.query;
 
     const tenders = await SavedTenderService.getSavedTenders(
-      req.user.userId,
+      req.user.id,
       { limit: parseInt(limit), offset: parseInt(offset) }
     );
 
-    const count = await SavedTenderService.getCount(req.user.userId);
+    const count = await SavedTenderService.getCount(req.user.id);
 
     res.json({
       success: true,
@@ -1405,7 +1405,7 @@ router.get('/saved-tenders', requireAuth, requireRole('BIDDER'), async (req, res
  */
 router.get('/saved-tenders/ids', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
-    const savedIds = await SavedTenderService.getSavedIds(req.user.userId);
+    const savedIds = await SavedTenderService.getSavedIds(req.user.id);
 
     res.json({
       success: true,
@@ -1427,7 +1427,7 @@ router.post('/saved-tenders', requireAuth, requireRole('BIDDER'), async (req, re
 
     const saved = await SavedTenderService.saveTender(
       { tenderId, uploadedTenderId },
-      req.user.userId,
+      req.user.id,
       req.user.organizationId
     );
 
@@ -1455,7 +1455,7 @@ router.post('/saved-tenders/toggle', requireAuth, requireRole('BIDDER'), async (
 
     const result = await SavedTenderService.toggleSave(
       { tenderId, uploadedTenderId },
-      req.user.userId,
+      req.user.id,
       req.user.organizationId
     );
 
@@ -1480,7 +1480,7 @@ router.delete('/saved-tenders', requireAuth, requireRole('BIDDER'), async (req, 
 
     const deleted = await SavedTenderService.unsaveTender(
       { tenderId, uploadedTenderId },
-      req.user.userId
+      req.user.id
     );
 
     if (!deleted) {
@@ -1509,11 +1509,11 @@ router.get('/uploaded-proposal-drafts', requireAuth, requireRole('BIDDER'), asyn
     const { limit = 50, offset = 0, status } = req.query;
 
     const drafts = await UploadedProposalDraftService.listByUser(
-      req.user.userId,
+      req.user.id,
       { limit: parseInt(limit), offset: parseInt(offset), status }
     );
 
-    const count = await UploadedProposalDraftService.getCount(req.user.userId, { status });
+    const count = await UploadedProposalDraftService.getCount(req.user.id, { status });
 
     res.json({
       success: true,
@@ -1536,7 +1536,7 @@ router.get('/uploaded-proposal-drafts', requireAuth, requireRole('BIDDER'), asyn
 router.get('/uploaded-proposal-drafts/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const draft = await UploadedProposalDraftService.getById(id, req.user.userId);
+    const draft = await UploadedProposalDraftService.getById(id, req.user.id);
 
     if (!draft) {
       return res.status(404).json({ error: 'Draft not found' });
@@ -1560,7 +1560,7 @@ router.get('/uploaded-proposal-drafts/tender/:uploadedTenderId', requireAuth, re
     const { uploadedTenderId } = req.params;
     const draft = await UploadedProposalDraftService.getByUploadedTenderId(
       uploadedTenderId,
-      req.user.userId
+      req.user.id
     );
 
     if (!draft) {
@@ -1591,7 +1591,7 @@ router.post('/uploaded-proposal-drafts', requireAuth, requireRole('BIDDER'), asy
 
     const draft = await UploadedProposalDraftService.upsert(
       { uploadedTenderId, sections, title },
-      req.user.userId,
+      req.user.id,
       req.user.organizationId
     );
 
@@ -1619,7 +1619,7 @@ router.put('/uploaded-proposal-drafts/:id/status', requireAuth, requireRole('BID
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    const draft = await UploadedProposalDraftService.updateStatus(id, status, req.user.userId);
+    const draft = await UploadedProposalDraftService.updateStatus(id, status, req.user.id);
 
     res.json({
       success: true,
@@ -1641,7 +1641,7 @@ router.put('/uploaded-proposal-drafts/:id/status', requireAuth, requireRole('BID
 router.post('/uploaded-proposal-drafts/:id/export', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const draft = await UploadedProposalDraftService.recordExport(id, req.user.userId);
+    const draft = await UploadedProposalDraftService.recordExport(id, req.user.id);
 
     res.json({
       success: true,
@@ -1663,7 +1663,7 @@ router.post('/uploaded-proposal-drafts/:id/export', requireAuth, requireRole('BI
 router.delete('/uploaded-proposal-drafts/:id', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deleted = await UploadedProposalDraftService.delete(id, req.user.userId);
+    const deleted = await UploadedProposalDraftService.delete(id, req.user.id);
 
     if (!deleted) {
       return res.status(404).json({ error: 'Draft not found or unauthorized' });

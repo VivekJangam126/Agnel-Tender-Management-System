@@ -5,7 +5,8 @@ import {
   initializeTenderEvaluation,
   updateBidEvaluation,
   completeEvaluation,
-  getTenderEvaluationDetails
+  getTenderEvaluationDetails,
+  getAIEvaluationScore
 } from '../controllers/evaluation.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -29,6 +30,9 @@ router.get('/tenders/:tenderId/details', getTenderEvaluationDetails);
 
 // Update bid evaluation
 router.put('/bids/:proposalId', updateBidEvaluation);
+
+// Get AI-powered evaluation score for a proposal
+router.get('/bids/:proposalId/ai-score', getAIEvaluationScore);
 
 // Complete evaluation for a tender
 router.post('/tenders/:tenderId/complete', completeEvaluation);

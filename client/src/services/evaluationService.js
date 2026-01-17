@@ -34,4 +34,8 @@ export const evaluationService = {
   // Get evaluation details for a tender
   getTenderEvaluationDetails: (tenderId, token) =>
     apiRequest(`/evaluation/tenders/${tenderId}/details`, { token }),
+
+  // Get AI-powered evaluation score for a proposal
+  getAIEvaluationScore: (proposalId, token) =>
+    apiRequest(`/evaluation/bids/${proposalId}/ai-score`, { token }),
 };

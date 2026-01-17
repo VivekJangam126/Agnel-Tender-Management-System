@@ -36,17 +36,12 @@ export const uploadedTenderController = {
   async getById(req, res) {
     try {
       const { id } = req.params;
-      const userId = req.user.user_id;
+      const userId = req.user.id;
 
-      const tender = await UploadedTenderService.findById(id);
+      const tender = await UploadedTenderService.getById(id, userId);
 
       if (!tender) {
         return res.status(404).json({ error: 'Tender not found' });
-      }
-
-      // Verify user has access to this tender
-      if (tender.user_id !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
       }
 
       res.json(tender);

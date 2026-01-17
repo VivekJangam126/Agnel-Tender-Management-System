@@ -85,7 +85,300 @@ const SECTION_TYPE_MAPPING = {
   },
 };
 
+// Default proposal sections with generation prompts
+const DEFAULT_PROPOSAL_SECTIONS = {
+  coverLetter: {
+    title: 'Cover Letter',
+    type: 'GENERAL',
+    promptHint: 'Write a formal cover letter expressing interest in the tender, summarizing key qualifications and commitment to deliver.',
+  },
+  companyProfile: {
+    title: 'Company Profile',
+    type: 'ELIGIBILITY',
+    promptHint: 'Describe company background, legal status, years of experience, key capabilities, and organizational strengths.',
+  },
+  technicalApproach: {
+    title: 'Technical Approach',
+    type: 'TECHNICAL',
+    promptHint: 'Detail the methodology, technical solution, execution approach, and how requirements will be met.',
+  },
+  teamComposition: {
+    title: 'Team Composition',
+    type: 'ELIGIBILITY',
+    promptHint: 'Describe the project team structure, key personnel qualifications, roles, and relevant experience.',
+  },
+  projectPlan: {
+    title: 'Project Plan',
+    type: 'TECHNICAL',
+    promptHint: 'Outline the project timeline, milestones, deliverables, and execution schedule.',
+  },
+  financialProposal: {
+    title: 'Financial Proposal',
+    type: 'FINANCIAL',
+    promptHint: 'Address pricing structure, payment terms, EMD compliance, and financial commitments.',
+  },
+  compliance: {
+    title: 'Compliance Statement',
+    type: 'TERMS',
+    promptHint: 'Declare compliance with eligibility criteria, legal requirements, and tender conditions.',
+  },
+  pastExperience: {
+    title: 'Past Experience',
+    type: 'ELIGIBILITY',
+    promptHint: 'Highlight relevant past projects, client references, and demonstrated track record.',
+  },
+  annexures: {
+    title: 'Annexures',
+    type: 'GENERAL',
+    promptHint: 'List supporting documents, certificates, and attachments to be included.',
+  },
+};
+
 export const CollaborativeDrafterService = {
+  // ==========================================
+  // INITIAL CONTENT GENERATION FOR ALL SECTIONS
+  // ==========================================
+
+  /**
+   * Generate initial content for all proposal sections based on tender analysis
+   * This is called when user first opens proposal drafting for an uploaded tender
+   */
+  async generateInitialProposalContent(uploadedTenderId, userId) {
+    console.log(`[CollaborativeDrafter] Generating initial content for all sections of tender ${uploadedTenderId}`);
+
+    // Get uploaded tender with analysis data
+    const result = await pool.query(
+      `SELECT ut.uploaded_tender_id, ut.title, ut.original_filename,
+              ut.analysis_data, ut.parsed_data, ut.sector, ut.estimated_value,
+              ut.authority_name, ut.reference_number, ut.submission_deadline
+       FROM uploaded_tender ut
+       WHERE ut.uploaded_tender_id = $1`,
+      [uploadedTenderId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Uploaded tender not found');
+    }
+
+    const data = result.rows[0];
+    const analysisData = data.analysis_data || {};
+    const parsedData = data.parsed_data || {};
+
+    // Build comprehensive tender context
+    const tenderContext = {
+      tenderId: data.uploaded_tender_id,
+      title: data.title || analysisData.parsed?.title || data.original_filename,
+      authority: data.authority_name || analysisData.parsed?.metadata?.authority || '[Issuing Authority]',
+      referenceNumber: data.reference_number || analysisData.parsed?.metadata?.referenceNumber || '[Reference Number]',
+      sector: data.sector || analysisData.parsed?.metadata?.sector || 'General',
+      estimatedValue: data.estimated_value || analysisData.parsed?.metadata?.estimatedValue,
+      deadline: data.submission_deadline,
+      executiveSummary: analysisData.summary?.executiveSummary || '',
+      keyHighlights: analysisData.summary?.keyHighlights || [],
+      opportunityScore: analysisData.summary?.opportunityScore || 0,
+    };
+
+    // Extract bullet points from analysis
+    const bulletPoints = analysisData.summary?.bulletPoints || {};
+    const normalizedSections = analysisData.normalizedSections || [];
+
+    // Build context for each section type
+    const sectionContexts = {
+      eligibility: this._extractContextForType(normalizedSections, bulletPoints, 'ELIGIBILITY'),
+      technical: this._extractContextForType(normalizedSections, bulletPoints, 'SCOPE'),
+      financial: this._extractContextForType(normalizedSections, bulletPoints, 'COMMERCIAL'),
+      compliance: this._extractContextForType(normalizedSections, bulletPoints, 'LEGAL'),
+      evaluation: this._extractContextForType(normalizedSections, bulletPoints, 'EVALUATION'),
+    };
+
+    // Generate content for each default section
+    const generatedSections = [];
+    const sectionKeys = Object.keys(DEFAULT_PROPOSAL_SECTIONS);
+
+    // Generate sections sequentially to avoid rate limiting
+    // We batch 3 at a time for reasonable speed while staying within limits
+    const batchSize = 3;
+    for (let i = 0; i < sectionKeys.length; i += batchSize) {
+      const batch = sectionKeys.slice(i, i + batchSize);
+      console.log(`[CollaborativeDrafter] Generating batch ${Math.floor(i / batchSize) + 1}: ${batch.join(', ')}`);
+
+      const batchPromises = batch.map(async (sectionKey) => {
+        try {
+          const sectionConfig = DEFAULT_PROPOSAL_SECTIONS[sectionKey];
+          const content = await this._generateSectionContent(
+            sectionKey,
+            sectionConfig,
+            tenderContext,
+            sectionContexts,
+            analysisData
+          );
+          return { key: sectionKey, content, success: true };
+        } catch (err) {
+          console.error(`[CollaborativeDrafter] Failed to generate ${sectionKey}:`, err.message);
+          return { key: sectionKey, content: '', success: false };
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      batchResults.forEach(result => {
+        if (result.success && result.content) {
+          generatedSections.push({
+            key: result.key,
+            content: result.content,
+          });
+        }
+      });
+
+      // Small delay between batches to avoid rate limiting
+      if (i + batchSize < sectionKeys.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(`[CollaborativeDrafter] Generated initial content for ${generatedSections.length} sections`);
+
+    return {
+      sections: generatedSections,
+      tenderContext: {
+        title: tenderContext.title,
+        authority: tenderContext.authority,
+        referenceNumber: tenderContext.referenceNumber,
+        sector: tenderContext.sector,
+      },
+    };
+  },
+
+  /**
+   * Extract relevant context for a section type from normalized sections
+   */
+  _extractContextForType(normalizedSections, bulletPoints, category) {
+    const relevantSections = normalizedSections.filter(
+      s => s.category === category || s.name?.toLowerCase().includes(category.toLowerCase())
+    );
+
+    let context = '';
+
+    relevantSections.forEach(section => {
+      if (section.aiSummary) {
+        context += section.aiSummary + '\n';
+      }
+      if (section.keyPoints?.length) {
+        context += section.keyPoints.join('\n') + '\n';
+      }
+    });
+
+    // Add bullet points based on category
+    switch (category) {
+      case 'ELIGIBILITY':
+        if (bulletPoints.eligibilityCriteria?.length) {
+          context += '\nEligibility Criteria:\n' + bulletPoints.eligibilityCriteria.join('\n');
+        }
+        break;
+      case 'SCOPE':
+        if (bulletPoints.technicalSpecifications?.length) {
+          context += '\nTechnical Requirements:\n' + bulletPoints.technicalSpecifications.join('\n');
+        }
+        break;
+      case 'COMMERCIAL':
+        if (bulletPoints.financialTerms?.length) {
+          context += '\nFinancial Terms:\n' + bulletPoints.financialTerms.join('\n');
+        }
+        break;
+      case 'LEGAL':
+        if (bulletPoints.complianceRequirements?.length) {
+          context += '\nCompliance Requirements:\n' + bulletPoints.complianceRequirements.join('\n');
+        }
+        break;
+    }
+
+    return context.trim();
+  },
+
+  /**
+   * Generate content for a single section
+   */
+  async _generateSectionContent(sectionKey, sectionConfig, tenderContext, sectionContexts, analysisData) {
+    const { title, type, promptHint } = sectionConfig;
+    const typeMapping = SECTION_TYPE_MAPPING[type] || SECTION_TYPE_MAPPING.GENERAL;
+
+    // Get relevant context based on section type
+    let relevantContext = '';
+    switch (type) {
+      case 'ELIGIBILITY':
+        relevantContext = sectionContexts.eligibility;
+        break;
+      case 'TECHNICAL':
+        relevantContext = sectionContexts.technical;
+        break;
+      case 'FINANCIAL':
+        relevantContext = sectionContexts.financial;
+        break;
+      case 'TERMS':
+        relevantContext = sectionContexts.compliance;
+        break;
+      case 'EVALUATION':
+        relevantContext = sectionContexts.evaluation;
+        break;
+      default:
+        relevantContext = tenderContext.executiveSummary;
+    }
+
+    const systemPrompt = `You are an expert proposal writer for government and corporate tenders in India.
+
+TENDER DETAILS:
+- Title: ${tenderContext.title}
+- Issuing Authority: ${tenderContext.authority}
+- Reference Number: ${tenderContext.referenceNumber}
+- Sector: ${tenderContext.sector}
+${tenderContext.estimatedValue ? `- Estimated Value: ₹${Number(tenderContext.estimatedValue).toLocaleString()}` : ''}
+${tenderContext.deadline ? `- Submission Deadline: ${new Date(tenderContext.deadline).toLocaleDateString()}` : ''}
+
+KEY HIGHLIGHTS FROM TENDER:
+${tenderContext.keyHighlights.slice(0, 5).map(h => `• ${h}`).join('\n') || 'Not specified'}
+
+CRITICAL RULES:
+1. Use ONLY information from the provided tender context
+2. Use placeholders like [Company Name], [X years], [Specify value] for bidder-specific details
+3. Reference tender requirements explicitly where available
+4. Use formal, professional language appropriate for Indian government/corporate tender submissions
+5. Be specific where tender provides details, use appropriate placeholders where not
+6. Structure content professionally with clear headings where appropriate`;
+
+    const userPrompt = `Generate professional proposal content for the "${title}" section.
+
+SECTION PURPOSE:
+${promptHint}
+
+RELEVANT TENDER REQUIREMENTS:
+${relevantContext || 'General requirements - address comprehensively based on standard tender expectations'}
+
+SUGGESTED STRUCTURE:
+${typeMapping.structure.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+Generate a complete, ready-to-customize proposal section that:
+1. Directly addresses the tender context and requirements
+2. Uses clear, professional language
+3. Includes appropriate placeholders for company-specific information like [Company Name], [X years of experience], [Turnover Amount], etc.
+4. Is structured for easy reading and compliance checking
+5. Demonstrates understanding of the tender requirements
+
+Important: Write substantive content (200-400 words) that provides real value and can be customized by the bidder.
+
+Response:`;
+
+    const draft = await LLMCaller.call({
+      systemPrompt,
+      userPrompt,
+      provider: 'groq',
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.4,
+      maxTokens: 1500,
+    });
+
+    return this._cleanDraft(draft);
+  },
+
   // ==========================================
   // SECTION DRAFT GENERATION
   // ==========================================
@@ -153,9 +446,9 @@ export const CollaborativeDrafterService = {
     } else {
       // Uploaded tender - use uploaded_tender analysis
       const result = await pool.query(
-        `SELECT ut.id, ut.title, ut.filename, ut.analysis_json, ut.sector, ut.estimated_value
+        `SELECT ut.uploaded_tender_id, ut.title, ut.original_filename, ut.analysis_data, ut.sector, ut.estimated_value
          FROM uploaded_tender ut
-         WHERE ut.id = $1`,
+         WHERE ut.uploaded_tender_id = $1`,
         [uploadedTenderId]
       );
 
@@ -164,21 +457,21 @@ export const CollaborativeDrafterService = {
       }
 
       const data = result.rows[0];
-      const analysisJson = data.analysis_json || {};
+      const analysisData = data.analysis_data || {};
 
       tenderContext = {
-        tenderId: data.id,
-        title: data.title || analysisJson.parsed?.title || data.filename,
-        description: analysisJson.summary?.executiveSummary || '',
-        sector: data.sector || analysisJson.parsed?.metadata?.sector,
-        estimatedValue: data.estimated_value || analysisJson.parsed?.metadata?.estimatedValue,
-        organization: analysisJson.parsed?.metadata?.authority || '',
+        tenderId: data.uploaded_tender_id,
+        title: data.title || analysisData.parsed?.title || data.original_filename,
+        description: analysisData.summary?.executiveSummary || '',
+        sector: data.sector || analysisData.parsed?.metadata?.sector,
+        estimatedValue: data.estimated_value || analysisData.parsed?.metadata?.estimatedValue,
+        organization: analysisData.parsed?.metadata?.authority || '',
       };
 
       // For uploaded tenders, sectionId is actually sectionKey (string like 'technicalApproach')
       sectionInfo = {
         title: this._sectionKeyToTitle(sectionId),
-        content: this._extractSectionRequirements(analysisJson, sectionId),
+        content: this._extractSectionRequirements(analysisData, sectionId),
         type: this._inferSectionType(sectionId),
       };
 
@@ -469,10 +762,10 @@ Response:`;
     } else {
       // Uploaded tender validation
       const tenderResult = await pool.query(
-        `SELECT ut.*, upd.sections_json
+        `SELECT ut.*, upd.sections
          FROM uploaded_tender ut
-         LEFT JOIN uploaded_proposal_draft upd ON upd.uploaded_tender_id = ut.id
-         WHERE ut.id = $1`,
+         LEFT JOIN uploaded_proposal_draft upd ON upd.uploaded_tender_id = ut.uploaded_tender_id
+         WHERE ut.uploaded_tender_id = $1`,
         [uploadedTenderId]
       );
 
@@ -481,27 +774,27 @@ Response:`;
       }
 
       const data = tenderResult.rows[0];
-      const analysisJson = data.analysis_json || {};
+      const analysisData = data.analysis_data || {};
 
       tenderContext = {
-        title: data.title || analysisJson.parsed?.title,
-        description: analysisJson.summary?.executiveSummary || '',
+        title: data.title || analysisData.parsed?.title,
+        description: analysisData.summary?.executiveSummary || '',
       };
 
       // Extract sections from analysis
-      const proposalDraft = analysisJson.proposalDraft || {};
+      const proposalDraft = analysisData.proposalDraft || {};
       sections = (proposalDraft.sections || []).map(s => ({
         sectionId: s.id,
         title: s.title,
-        requirements: this._extractSectionRequirements(analysisJson, s.id),
+        requirements: this._extractSectionRequirements(analysisData, s.id),
         isMandatory: true,
       }));
 
       // Get saved draft responses
-      const draftSections = data.sections_json || [];
+      const draftSections = typeof data.sections === 'string' ? JSON.parse(data.sections) : (data.sections || []);
       sectionResponses = {};
       draftSections.forEach(s => {
-        sectionResponses[s.id] = s.content;
+        sectionResponses[s.key || s.id] = s.content;
       });
     }
 

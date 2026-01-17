@@ -26,8 +26,8 @@ export function CollaborationProvider({
   uploadedTenderId = null,
   tenderType = 'platform', // 'platform' or 'uploaded'
 }) {
-  // Core state
-  const [isOwner, setIsOwner] = useState(false);
+  // Core state - default to true to allow editing until permissions are loaded
+  const [isOwner, setIsOwner] = useState(true);
   const [assignments, setAssignments] = useState({}); // { sectionId: [users] }
   const [userPermissions, setUserPermissions] = useState({}); // { sectionId: permission }
   const [lastEdits, setLastEdits] = useState({}); // { sectionId: { user_name, edited_at } }
@@ -80,6 +80,9 @@ export function CollaborationProvider({
     } catch (err) {
       console.error('[CollaborationContext] Load error:', err);
       setError(err.response?.data?.error || err.message);
+      // On error, default to allowing edit (assume owner) to prevent blocking the user
+      // The backend will still enforce permissions on save operations
+      setIsOwner(true);
     } finally {
       setLoading(false);
     }
@@ -96,29 +99,35 @@ export function CollaborationProvider({
 
   /**
    * Check if current user can edit a section
+   * Returns true while loading to prevent blocking the UI
    */
   const canEditSection = useCallback((sectionId) => {
+    if (loading) return true; // Allow editing while loading
     if (isOwner) return true;
     const permission = userPermissions[sectionId];
     return permission === 'EDIT';
-  }, [isOwner, userPermissions]);
+  }, [loading, isOwner, userPermissions]);
 
   /**
    * Check if current user can comment on a section
+   * Returns true while loading to prevent blocking the UI
    */
   const canCommentSection = useCallback((sectionId) => {
+    if (loading) return true; // Allow commenting while loading
     if (isOwner) return true;
     const permission = userPermissions[sectionId];
     return permission === 'EDIT' || permission === 'READ_AND_COMMENT';
-  }, [isOwner, userPermissions]);
+  }, [loading, isOwner, userPermissions]);
 
   /**
    * Get user's permission for a section
+   * Returns 'OWNER' while loading to prevent blocking the UI
    */
   const getSectionPermission = useCallback((sectionId) => {
+    if (loading) return 'OWNER'; // Assume owner while loading
     if (isOwner) return 'OWNER';
     return userPermissions[sectionId] || null;
-  }, [isOwner, userPermissions]);
+  }, [loading, isOwner, userPermissions]);
 
   /**
    * Check if user has any access to section

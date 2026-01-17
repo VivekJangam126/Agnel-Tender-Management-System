@@ -2,12 +2,31 @@ import { AuthService } from '../services/auth.service.js';
 
 export async function signup(req, res, next) {
   try {
-    const { name, email, password, role, organizationName } = req.body;
+    const { name, email, password, role, organizationName, specialty } = req.body;
 
     // Input validation
-    if (!name || !email || !password || !role || !organizationName) {
+    if (!name || !email || !password || !role) {
       return res.status(400).json({
-        error: 'Missing required fields: name, email, password, role, organizationName',
+        error: 'Missing required fields: name, email, password, role',
+      });
+    }
+
+    // Role validation
+    if (!['AUTHORITY', 'BIDDER', 'REVIEWER'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be AUTHORITY, BIDDER, or REVIEWER' });
+    }
+
+    // organizationName is required for AUTHORITY and BIDDER, optional for REVIEWER
+    if (role !== 'REVIEWER' && !organizationName) {
+      return res.status(400).json({
+        error: 'Organization name is required for AUTHORITY and BIDDER roles',
+      });
+    }
+
+    // Specialty is required for REVIEWER
+    if (role === 'REVIEWER' && !specialty) {
+      return res.status(400).json({
+        error: 'Specialty is required for REVIEWER role',
       });
     }
 
@@ -22,17 +41,13 @@ export async function signup(req, res, next) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    // Role validation
-    if (!['AUTHORITY', 'BIDDER'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be AUTHORITY or BIDDER' });
-    }
-
     const result = await AuthService.signup({
       name,
       email,
       password,
       role,
       organizationName,
+      specialty,
     });
 
     res.status(201).json(result);

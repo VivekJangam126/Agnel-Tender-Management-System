@@ -497,7 +497,7 @@ export const CommentService = {
     const check = await pool.query(
       `SELECT upc.*, ut.organization_id
        FROM uploaded_proposal_comment upc
-       JOIN uploaded_tender ut ON upc.uploaded_tender_id = ut.id
+       JOIN uploaded_tender ut ON upc.uploaded_tender_id = ut.uploaded_tender_id
        WHERE upc.comment_id = $1`,
       [commentId]
     );

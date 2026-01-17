@@ -29,7 +29,22 @@ import {
   Clock,
   Save,
   RefreshCw,
+  Plus,
+  X,
 } from 'lucide-react';
+
+// Default proposal sections that should always be available
+const DEFAULT_PROPOSAL_SECTIONS = [
+  { key: 'coverLetter', name: 'Cover Letter', description: 'Introduction and executive summary' },
+  { key: 'companyProfile', name: 'Company Profile', description: 'Organization background and capabilities' },
+  { key: 'technicalApproach', name: 'Technical Approach', description: 'Methodology and technical solution' },
+  { key: 'teamComposition', name: 'Team Composition', description: 'Project team and qualifications' },
+  { key: 'projectPlan', name: 'Project Plan', description: 'Timeline, milestones and deliverables' },
+  { key: 'financialProposal', name: 'Financial Proposal', description: 'Pricing and payment terms' },
+  { key: 'compliance', name: 'Compliance Statement', description: 'Eligibility and compliance declarations' },
+  { key: 'pastExperience', name: 'Past Experience', description: 'Relevant projects and references' },
+  { key: 'annexures', name: 'Annexures', description: 'Supporting documents and attachments' },
+];
 
 // Layout
 import BidderLayout from '../../components/bidder-layout/BidderLayout';
@@ -44,6 +59,7 @@ import ValidationResultsPanel from '../../components/proposal/ValidationResultsP
 import { tenderService } from '../../services/bidder/tenderService';
 import { proposalService } from '../../services/bidder/proposalService';
 import { pdfAnalysisService } from '../../services/bidder/pdfAnalysisService';
+import { collaborationService } from '../../services/bidder/collaborationService';
 
 /**
  * Section List Component for the sidebar
@@ -54,8 +70,11 @@ function SectionListPanel({
   onSelectSection,
   sectionContents,
   assignments,
-  isOwner,
+  onAddSection,
 }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+
   const getSectionStatus = (section) => {
     const sectionId = section.section_id || section._id || section.id || section.key;
     const content = sectionContents[sectionId] || '';
@@ -77,15 +96,65 @@ function SectionListPanel({
     }
   };
 
+  const handleAddSection = () => {
+    if (newSectionName.trim()) {
+      onAddSection(newSectionName.trim());
+      setNewSectionName('');
+      setShowAddModal(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-200">
-        <h3 className="font-semibold text-slate-900">Sections</h3>
-        <p className="text-xs text-slate-500 mt-1">
-          {sections.filter((s) => getSectionStatus(s) === 'complete').length} / {sections.length} complete
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-900">Sections</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {sections.filter((s) => getSectionStatus(s) === 'complete').length} / {sections.length} complete
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            title="Add custom section"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Add Section Modal */}
+      {showAddModal && (
+        <div className="px-4 py-3 bg-blue-50 border-b border-blue-200">
+          <p className="text-xs font-medium text-blue-800 mb-2">Add Custom Section</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddSection()}
+              placeholder="Section name..."
+              className="flex-1 px-2 py-1.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              autoFocus
+            />
+            <button
+              onClick={handleAddSection}
+              disabled={!newSectionName.trim()}
+              className="px-2 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              Add
+            </button>
+            <button
+              onClick={() => { setShowAddModal(false); setNewSectionName(''); }}
+              className="p-1.5 text-slate-500 hover:text-slate-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Section List */}
       <div className="flex-1 overflow-y-auto">
@@ -120,11 +189,22 @@ function SectionListPanel({
                   {section.title || section.sectionTitle || section.name || 'Untitled'}
                 </p>
 
+                {/* Description */}
+                {section.description && (
+                  <p className="text-xs text-slate-500 truncate mt-0.5">{section.description}</p>
+                )}
+
                 {/* Metadata row */}
                 <div className="flex items-center gap-2 mt-1">
                   {section.is_mandatory && (
                     <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
                       Required
+                    </span>
+                  )}
+
+                  {section.isCustom && (
+                    <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                      Custom
                     </span>
                   )}
 
@@ -165,6 +245,7 @@ function WorkspaceContent({
   onSave,
   saving,
   lastSaved,
+  onAddSection,
 }) {
   const { isOwner, assignments, loading: collaborationLoading } = useCollaboration();
   const [showSidebar, setShowSidebar] = useState(true);
@@ -223,6 +304,7 @@ function WorkspaceContent({
             sectionContents={sectionContents}
             assignments={assignments}
             isOwner={isOwner}
+            onAddSection={onAddSection}
           />
         </div>
       )}
@@ -330,6 +412,10 @@ export default function CollaborativeProposalWorkspace() {
   const tenderType = uploadedTenderId ? 'uploaded' : 'platform';
   const entityId = uploadedTenderId || tenderId;
 
+  // DEBUG: This should always show
+  console.log('=== CollaborativeProposalWorkspace RENDERED ===');
+  console.log('[CollaborativeWorkspace] Mounted with:', { tenderId, uploadedTenderId, tenderType, entityId });
+
   // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -340,6 +426,8 @@ export default function CollaborativeProposalWorkspace() {
   const [sectionContents, setSectionContents] = useState({});
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState({});
+  const [generatingInitialContent, setGeneratingInitialContent] = useState(false);
+  const [initialContentProgress, setInitialContentProgress] = useState('');
 
   // Auto-save timer ref
   const autoSaveTimers = useRef({});
@@ -395,34 +483,141 @@ export default function CollaborativeProposalWorkspace() {
           const uploadedData = uploadedRes.data?.data || uploadedRes.data;
           setTender(uploadedData);
 
-          // For uploaded tenders, sections come from normalizedSections
-          const normalizedSections = uploadedData.normalizedSections || [];
-          const sectionsWithIds = normalizedSections.map((section, idx) => ({
+          // Start with default proposal sections
+          const defaultSections = DEFAULT_PROPOSAL_SECTIONS.map((section) => ({
             ...section,
-            key: section.key || `section-${idx}`,
-            section_id: section.key || `section-${idx}`,
+            section_id: section.key,
+            title: section.name,
+            isDefault: true,
           }));
-          setSections(sectionsWithIds);
+
+          // Get any additional sections from normalizedSections that aren't in defaults
+          // normalizedSections have `category` as the key identifier
+          const normalizedSections = uploadedData.normalizedSections || [];
+          const defaultKeys = DEFAULT_PROPOSAL_SECTIONS.map(s => s.key);
+
+          // Add normalized sections that aren't already in defaults
+          const additionalSections = normalizedSections
+            .filter(section => {
+              const sectionKey = section.key || section.category;
+              return sectionKey && !defaultKeys.includes(sectionKey);
+            })
+            .map((section, idx) => {
+              const sectionKey = section.key || section.category || `normalized-${idx}`;
+              return {
+                ...section,
+                key: sectionKey,
+                section_id: sectionKey,
+                title: section.name || section.title || sectionKey,
+                isFromTender: true,
+              };
+            });
+
+          // Combine: defaults first, then any additional from tender
+          const allSections = [...defaultSections, ...additionalSections];
+          setSections(allSections);
 
           // Load draft contents
-          const draftRes = await pdfAnalysisService.getProposalDraft(uploadedTenderId);
-          const draftData = draftRes.data?.data || draftRes.data;
-
-          if (draftData) {
-            setProposal(draftData);
-            // Load section contents from draft
-            const contents = {};
-            if (draftData.sections) {
-              draftData.sections.forEach((section) => {
-                contents[section.key || section.section_key] = section.content || '';
-              });
-            }
-            setSectionContents(contents);
+          let draftData = null;
+          try {
+            console.log('[CollaborativeWorkspace] Fetching proposal draft for:', uploadedTenderId);
+            const draftRes = await pdfAnalysisService.getProposalDraft(uploadedTenderId);
+            draftData = draftRes.data?.data || draftRes.data;
+            console.log('[CollaborativeWorkspace] Draft response:', draftData);
+          } catch (draftErr) {
+            // No existing draft - that's okay, we'll generate initial content
+            console.log('[CollaborativeWorkspace] No existing draft found (404 expected):', draftErr.response?.status);
           }
 
+          let contents = {};
+
+          if (draftData) {
+            console.log('[CollaborativeWorkspace] Draft data found, loading sections...');
+            setProposal(draftData);
+            // Load section contents from draft
+            if (draftData.sections && Array.isArray(draftData.sections)) {
+              console.log('[CollaborativeWorkspace] Draft has', draftData.sections.length, 'sections');
+              draftData.sections.forEach((section) => {
+                const key = section.key || section.section_key;
+                const content = section.content || '';
+                contents[key] = content;
+                console.log(`[CollaborativeWorkspace] Section ${key}: ${content.length} chars`);
+              });
+            } else {
+              console.log('[CollaborativeWorkspace] Draft has no sections array');
+            }
+          } else {
+            console.log('[CollaborativeWorkspace] No draft data found');
+          }
+
+          // Check if we need to generate initial content
+          // Generate if no draft exists OR if all sections are empty
+          const contentValues = Object.values(contents);
+          const hasExistingContent = contentValues.some(
+            (content) => content && content.trim().length > 50
+          );
+          console.log('[CollaborativeWorkspace] Content check:', {
+            totalSections: contentValues.length,
+            hasExistingContent,
+            contentLengths: Object.entries(contents).map(([k, v]) => `${k}: ${v?.length || 0}`)
+          });
+
+          if (!hasExistingContent) {
+            // No existing content - generate initial AI content for all sections
+            console.log('[CollaborativeWorkspace] No existing content found, generating initial content...');
+            setGeneratingInitialContent(true);
+            setInitialContentProgress('Generating initial proposal content based on tender analysis...');
+
+            try {
+              console.log('[CollaborativeWorkspace] Calling generateInitialContent API for:', uploadedTenderId);
+              const initialContentRes = await collaborationService.generateInitialContent(uploadedTenderId);
+              console.log('[CollaborativeWorkspace] Initial content response:', initialContentRes);
+
+              if (initialContentRes?.sections && initialContentRes.sections.length > 0) {
+                // Apply generated content to sections
+                initialContentRes.sections.forEach((section) => {
+                  if (section.key && section.content) {
+                    contents[section.key] = section.content;
+                    console.log(`[CollaborativeWorkspace] Added content for section: ${section.key}`);
+                  }
+                });
+
+                // Save the generated content as draft
+                try {
+                  const sectionsToSave = Object.entries(contents)
+                    .filter(([, content]) => content && content.trim().length > 0)
+                    .map(([key, content]) => ({ key, content }));
+
+                  if (sectionsToSave.length > 0) {
+                    await pdfAnalysisService.saveProposalDraft({
+                      uploadedTenderId,
+                      sections: sectionsToSave,
+                    });
+                    console.log('[CollaborativeWorkspace] Saved initial content as draft');
+                  }
+                } catch (saveErr) {
+                  console.error('[CollaborativeWorkspace] Failed to save initial draft:', saveErr);
+                }
+              } else {
+                console.warn('[CollaborativeWorkspace] No sections returned from generateInitialContent');
+              }
+            } catch (genErr) {
+              console.error('[CollaborativeWorkspace] Failed to generate initial content:', genErr);
+              console.error('[CollaborativeWorkspace] Error details:', genErr.response?.data || genErr.message);
+              // Continue without initial content - user can still manually write
+            } finally {
+              setGeneratingInitialContent(false);
+              setInitialContentProgress('');
+            }
+          } else {
+            console.log('[CollaborativeWorkspace] Existing content found, skipping initial generation');
+          }
+
+          setSectionContents(contents);
+
           // Set first section as active
-          if (sectionsWithIds.length > 0) {
-            setActiveSection(sectionsWithIds[0]);
+          if (allSections.length > 0) {
+            setActiveSection(allSections[0]);
           }
         }
       } catch (err) {
@@ -445,6 +640,21 @@ export default function CollaborativeProposalWorkspace() {
     };
   }, []);
 
+  // Add custom section
+  const handleAddSection = useCallback((sectionName) => {
+    const key = sectionName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const newSection = {
+      key: `custom_${key}_${Date.now()}`,
+      section_id: `custom_${key}_${Date.now()}`,
+      name: sectionName,
+      title: sectionName,
+      description: 'Custom section',
+      isCustom: true,
+    };
+    setSections(prev => [...prev, newSection]);
+    setActiveSection(newSection);
+  }, []);
+
   // Save section content
   const handleSave = useCallback(
     async (sectionId, content) => {
@@ -458,7 +668,8 @@ export default function CollaborativeProposalWorkspace() {
           await proposalService.updateProposalSection(proposalId, sectionId, content);
         } else {
           // For uploaded tenders, save to draft
-          await pdfAnalysisService.saveProposalDraft(uploadedTenderId, {
+          await pdfAnalysisService.saveProposalDraft({
+            uploadedTenderId,
             sections: [{ key: sectionId, content }],
           });
         }
@@ -489,8 +700,14 @@ export default function CollaborativeProposalWorkspace() {
   if (loading) {
     return (
       <BidderLayout>
-        <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center justify-center h-screen">
           <Loading />
+          {generatingInitialContent && (
+            <div className="mt-4 text-center">
+              <p className="text-sm font-medium text-blue-600">{initialContentProgress}</p>
+              <p className="text-xs text-slate-500 mt-1">This may take a moment...</p>
+            </div>
+          )}
         </div>
       </BidderLayout>
     );
@@ -561,6 +778,12 @@ export default function CollaborativeProposalWorkspace() {
 
               {/* Right: Status indicators */}
               <div className="flex items-center gap-3">
+                {generatingInitialContent && (
+                  <span className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Generating initial content...
+                  </span>
+                )}
                 {proposal?.status && (
                   <span
                     className={`px-2 py-1 text-xs font-medium rounded ${
@@ -589,6 +812,7 @@ export default function CollaborativeProposalWorkspace() {
             onSave={handleSave}
             saving={saving}
             lastSaved={lastSaved}
+            onAddSection={handleAddSection}
           />
         </div>
       </BidderLayout>

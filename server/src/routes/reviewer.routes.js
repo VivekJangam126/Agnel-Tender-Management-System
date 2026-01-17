@@ -61,7 +61,7 @@ router.get('/assignments', requireAuth, requireRole('REVIEWER'), async (req, res
         upc.uploaded_tender_id,
         upc.section_key
        FROM uploaded_proposal_collaborator upc
-       JOIN uploaded_tender ut ON upc.uploaded_tender_id = ut.id
+       JOIN uploaded_tender ut ON upc.uploaded_tender_id = ut.uploaded_tender_id
        JOIN organization o ON ut.organization_id = o.organization_id
        WHERE upc.user_id = $1
        ORDER BY upc.assigned_at DESC`,
@@ -239,12 +239,12 @@ router.get('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAu
     // Get uploaded tender info and section content
     const tenderResult = await pool.query(
       `SELECT
-        ut.id as uploaded_tender_id,
+        ut.uploaded_tender_id,
         ut.title as tender_title,
         ut.status,
         ut.analysis_data
        FROM uploaded_tender ut
-       WHERE ut.id = $1`,
+       WHERE ut.uploaded_tender_id = $1`,
       [uploadedTenderId]
     );
 

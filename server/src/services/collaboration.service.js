@@ -12,22 +12,36 @@ export const CollaborationService = {
   // ==========================================
 
   /**
-   * Search users by email within the same organization
-   * Returns: [{user_id, name, email}] - NO internal roles exposed
+   * Search users by email or name
+   * Includes: same organization users + ASSISTER/REVIEWER from any organization
+   * Returns: [{user_id, name, email, role, specialty}]
    */
-  async searchUsersByEmail(email, organizationId, limit = 10) {
-    if (!email || email.length < 3) {
+  async searchUsersByEmail(searchQuery, organizationId, limit = 10) {
+    if (!searchQuery || searchQuery.length < 2) {
       return [];
     }
 
+    const searchPattern = `%${searchQuery}%`;
+
     const result = await pool.query(
-      `SELECT user_id, name, email
+      `SELECT user_id, name, email, role, specialty
        FROM "user"
-       WHERE organization_id = $1
-         AND LOWER(email) LIKE LOWER($2)
-       ORDER BY name ASC
+       WHERE (
+         -- Same organization users
+         organization_id = $1
+         OR
+         -- ASSISTER/REVIEWER from any organization (external collaborators)
+         role IN ('ASSISTER', 'REVIEWER')
+       )
+       AND (
+         LOWER(email) LIKE LOWER($2)
+         OR LOWER(name) LIKE LOWER($2)
+       )
+       ORDER BY
+         CASE WHEN organization_id = $1 THEN 0 ELSE 1 END,
+         name ASC
        LIMIT $3`,
-      [organizationId, `%${email}%`, limit]
+      [organizationId, searchPattern, limit]
     );
 
     return result.rows;
@@ -339,13 +353,15 @@ export const CollaborationService = {
 
   /**
    * Check if user's organization owns the uploaded tender
+   * Also checks if user directly uploaded the tender (for cases where organization_id might be null)
    */
   async isUploadedTenderOwner(userId, uploadedTenderId) {
     const result = await pool.query(
       `SELECT 1
        FROM uploaded_tender ut
-       JOIN "user" u ON ut.organization_id = u.organization_id
-       WHERE ut.id = $1 AND u.user_id = $2`,
+       JOIN "user" u ON u.user_id = $2
+       WHERE ut.uploaded_tender_id = $1
+         AND (ut.organization_id = u.organization_id OR ut.user_id = u.user_id)`,
       [uploadedTenderId, userId]
     );
 
@@ -357,11 +373,11 @@ export const CollaborationService = {
    */
   async getUploadedTenderWithOwnership(uploadedTenderId, userId) {
     const result = await pool.query(
-      `SELECT ut.*,
-              (ut.organization_id = u.organization_id) as is_owner
+      `SELECT ut.uploaded_tender_id as id, ut.title, ut.original_filename as filename, ut.status, ut.organization_id,
+              COALESCE(ut.organization_id = u.organization_id, ut.user_id = u.user_id) as is_owner
        FROM uploaded_tender ut
        JOIN "user" u ON u.user_id = $2
-       WHERE ut.id = $1`,
+       WHERE ut.uploaded_tender_id = $1`,
       [uploadedTenderId, userId]
     );
 
