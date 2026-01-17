@@ -30,8 +30,7 @@ import { tenderService } from '../../services/bidder/tenderService';
 import { proposalService } from '../../services/bidder/proposalService';
 import proposalExportService from '../../services/bidder/proposalExportService';
 
-// Icons
-import { ArrowLeft, Menu, Maximize2, Minimize2, Keyboard } from 'lucide-react';
+
 
 // Styles
 import '../../styles/proposal-theme.css';
