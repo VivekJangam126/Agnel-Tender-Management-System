@@ -2,45 +2,33 @@
  * PDF Analysis Service
  * Comprehensive AI-powered analysis of uploaded tender PDFs
  * Provides: Summary, Proposal Draft, and Evaluation
+ * 
+ * UPDATED: Section-wise RAG with token limits and context compression
+ * UPDATED: Section normalization for bidder-friendly UI
  */
 import { env } from '../config/env.js';
 import { PDFParserService } from './pdfParser.service.js';
 import { ChunkingService } from './chunking.service.js';
+import { LLMCaller } from '../utils/llmCaller.js';
+import { RAGOrchestrator } from '../utils/ragOrchestrator.js';
+import { TokenCounter } from '../utils/tokenCounter.js';
+import { SectionNormalizationService } from './sectionNormalization.service.js';
 
 const GROQ_MODEL = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 /**
- * Call GROQ Chat Completion API
+ * Call LLM with provider-agnostic wrapper (DEPRECATED - use LLMCaller)
  */
 async function callGroq(systemPrompt, userPrompt, options = {}) {
-  if (!env.GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY is not configured');
-  }
-
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: options.model || GROQ_MODEL,
-      temperature: options.temperature || 0.3,
-      max_tokens: options.maxTokens || 4000,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
+  // Delegate to new LLMCaller
+  return LLMCaller.call({
+    systemPrompt,
+    userPrompt,
+    provider: 'groq',
+    model: options.model || GROQ_MODEL,
+    temperature: options.temperature || 0.3,
+    maxTokens: options.maxTokens || 4000,
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`GROQ API failed: ${response.status} - ${errorBody}`);
-  }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content?.trim() || '';
 }
 
 /**
@@ -83,7 +71,21 @@ export const PDFAnalysisService = {
       };
     }
 
-    // Step 2: Generate Summary
+    const sessionId = `session-${Date.now()}`;
+
+    // Step 2: Normalize sections into bidder-friendly high-level sections
+    let normalizedSections;
+    try {
+      normalizedSections = await SectionNormalizationService.normalizeSections(
+        parsed.sections,
+        sessionId
+      );
+    } catch (err) {
+      console.error('Section normalization failed:', err.message);
+      normalizedSections = this._getFallbackNormalizedSections(parsed.sections);
+    }
+
+    // Step 3: Generate Summary
     let summary;
     try {
       summary = await this.generateSummary(parsed);
@@ -92,7 +94,7 @@ export const PDFAnalysisService = {
       summary = this._generateFallbackSummary(parsed);
     }
 
-    // Step 3: Generate Proposal Draft
+    // Step 4: Generate Proposal Draft
     let proposalDraft;
     try {
       proposalDraft = await this.generateProposalDraft(parsed, summary);
@@ -103,10 +105,10 @@ export const PDFAnalysisService = {
 
     return {
       success: true,
-      analysisId: `analysis-${Date.now()}`,
+      analysisId: sessionId,
       analyzedAt: new Date().toISOString(),
 
-      // Original parsed data
+      // Original parsed data (for backend use only)
       parsed: {
         filename: parsed.filename,
         title: parsed.title,
@@ -115,6 +117,9 @@ export const PDFAnalysisService = {
         sections: parsed.sections,
         pdfInfo: parsed.pdfInfo,
       },
+
+      // Normalized sections for UI (bidder-friendly)
+      normalizedSections,
 
       // AI-generated summary
       summary,
@@ -126,6 +131,7 @@ export const PDFAnalysisService = {
 
   /**
    * Generate comprehensive summary with bullet points
+   * UPDATED: Token-safe with compression
    */
   async generateSummary(parsed) {
     const systemPrompt = `You are an expert government tender analyst. Analyze the tender document and extract key information.
@@ -136,13 +142,18 @@ Your task is to:
 3. Identify critical requirements, deadlines, and risks
 4. Assess opportunity and provide actionable insights
 
-IMPORTANT:
-- Be specific - extract actual values (amounts, dates, percentages) where mentioned
-- Focus on what bidders need to prepare their proposal
-- Identify unusual or strict requirements
-- Use clear, concise bullet points`;
+RULES:
+- Use ONLY information from the provided context
+- Be specific - extract actual values (amounts, dates, percentages)
+- If information is missing, say "Not specified"
+- Do not hallucinate details`;
 
+    // Prepare content with token limit in mind
     const contentForAnalysis = this._prepareContentForAnalysis(parsed);
+    
+    // Check token budget
+    const budget = TokenCounter.getBudget(GROQ_MODEL, 3000);
+    console.log(`[PDF Summary] Token budget: ${budget.prompt} for prompt`);
 
     const userPrompt = `Analyze this government tender and provide a comprehensive summary:
 
@@ -155,7 +166,7 @@ EMD: ${parsed.metadata?.emdAmount ? `₹${parsed.metadata.emdAmount.toLocaleStri
 Deadline: ${parsed.metadata?.deadline || 'Not specified'}
 Reference: ${parsed.metadata?.referenceNumber || 'Not specified'}
 
-TENDER CONTENT:
+TENDER CONTENT (Compressed):
 ${contentForAnalysis}
 
 Respond in this exact JSON format:
@@ -539,4 +550,58 @@ Provide evaluation in this JSON format:
       recommendedActions: ['Review tender requirements', 'Complete all placeholders', 'Verify document checklist'],
     };
   },
+
+  /**
+   * Fallback normalized sections when AI normalization fails
+   */
+  _getFallbackNormalizedSections(rawSections) {
+    const sectionMap = {
+      overview: { name: 'Tender Overview', sections: [] },
+      scope: { name: 'Scope of Work', sections: [] },
+      eligibility: { name: 'Eligibility Criteria', sections: [] },
+      commercial: { name: 'Commercial Terms', sections: [] },
+      evaluation: { name: 'Evaluation Criteria', sections: [] },
+      timeline: { name: 'Timeline & Milestones', sections: [] },
+      penalties: { name: 'Penalties & Liquidated Damages', sections: [] },
+      legal: { name: 'Legal & Contractual Terms', sections: [] },
+      annexures: { name: 'Forms & Annexures', sections: [] },
+    };
+
+    // Basic categorization by keywords
+    rawSections.forEach((section) => {
+      const heading = section.heading.toLowerCase();
+      if (heading.includes('scope') || heading.includes('work')) {
+        sectionMap.scope.sections.push(section);
+      } else if (heading.includes('eligib') || heading.includes('qualif')) {
+        sectionMap.eligibility.sections.push(section);
+      } else if (heading.includes('commercial') || heading.includes('payment') || heading.includes('price')) {
+        sectionMap.commercial.sections.push(section);
+      } else if (heading.includes('evaluation') || heading.includes('criteria')) {
+        sectionMap.evaluation.sections.push(section);
+      } else if (heading.includes('timeline') || heading.includes('schedule') || heading.includes('deadline')) {
+        sectionMap.timeline.sections.push(section);
+      } else if (heading.includes('penalty') || heading.includes('liquidated') || heading.includes('damages')) {
+        sectionMap.penalties.sections.push(section);
+      } else if (heading.includes('legal') || heading.includes('contract') || heading.includes('terms')) {
+        sectionMap.legal.sections.push(section);
+      } else if (heading.includes('form') || heading.includes('annex') || heading.includes('format')) {
+        sectionMap.annexures.sections.push(section);
+      } else {
+        sectionMap.overview.sections.push(section);
+      }
+    });
+
+    return Object.entries(sectionMap)
+      .filter(([_, data]) => data.sections.length > 0)
+      .map(([category, data]) => ({
+        category,
+        name: data.name,
+        aiSummary: `This section contains information about ${data.name.toLowerCase()}. Please review the detailed content for complete information.`,
+        keyPoints: data.sections.slice(0, 3).map(s => s.heading),
+        importantNumbers: [],
+        rawSectionCount: data.sections.length,
+      }));
+  },
 };
+
+export default PDFAnalysisService;
