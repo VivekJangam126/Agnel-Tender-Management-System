@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import useAuth from "../../../hooks/useAuth";
 
-// Specialty options for reviewers
-const REVIEWER_SPECIALTIES = [
+// Specialty options for assisters
+const ASSISTER_SPECIALTIES = [
   "Finance",
   "Civil Engineering",
   "Legal",
@@ -48,7 +48,7 @@ export default function Signup() {
             ? "Government/Authority"
             : value === "bidder"
             ? "Business/Bidder"
-            : "Reviewer/Consultant",
+            : "Assister/Consultant",
         specialty: "",
         customSpecialty: "",
       });
@@ -67,14 +67,14 @@ export default function Signup() {
       return;
     }
 
-    // For reviewer, validate specialty selection
-    if (formData.role === "reviewer" && !formData.specialty) {
+    // For assister, validate specialty selection
+    if (formData.role === "assister" && !formData.specialty) {
       setError("Please select your specialty");
       return;
     }
 
     // If specialty is "Other", require custom specialty
-    if (formData.role === "reviewer" && formData.specialty === "Other" && !formData.customSpecialty) {
+    if (formData.role === "assister" && formData.specialty === "Other" && !formData.customSpecialty) {
       setError("Please enter your specialty");
       return;
     }
@@ -87,8 +87,8 @@ export default function Signup() {
     setError("");
     setIsLoading(true);
 
-    // For reviewer, organization name is optional
-    if (formData.role !== "reviewer" && !formData.organizationName) {
+    // For assister, organization name is optional
+    if (formData.role !== "assister" && !formData.organizationName) {
       setError("Organization name is required");
       setIsLoading(false);
       return;
@@ -106,14 +106,14 @@ export default function Signup() {
         password: formData.password,
         role: formData.role.toUpperCase(),
         organizationName: formData.organizationName || undefined,
-        specialty: formData.role === "reviewer" ? finalSpecialty : undefined,
+        specialty: formData.role === "assister" ? finalSpecialty : undefined,
       });
 
       // Redirect based on role
       if (user.role === "authority") {
         navigate("/admin/dashboard");
-      } else if (user.role === "reviewer") {
-        navigate("/reviewer/dashboard");
+      } else if (user.role === "assister") {
+        navigate("/assister/dashboard");
       } else {
         navigate("/bidder/dashboard");
       }
@@ -190,7 +190,7 @@ export default function Signup() {
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
                     I am a <span className="text-red-500">*</span>
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     <button
                       type="button"
                       onClick={() =>
@@ -198,7 +198,7 @@ export default function Signup() {
                           target: { name: "role", value: "authority" },
                         })
                       }
-                      className={`px-3 py-3 rounded-lg border-2 transition-all text-sm ${
+                      className={`px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${
                         formData.role === "authority"
                           ? "border-primary-500 bg-primary-50 text-primary-700"
                           : "border-neutral-300 bg-white/50 text-neutral-700 hover:border-primary-300"
@@ -213,7 +213,7 @@ export default function Signup() {
                           target: { name: "role", value: "bidder" },
                         })
                       }
-                      className={`px-3 py-3 rounded-lg border-2 transition-all text-sm ${
+                      className={`px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${
                         formData.role === "bidder"
                           ? "border-primary-500 bg-primary-50 text-primary-700"
                           : "border-neutral-300 bg-white/50 text-neutral-700 hover:border-primary-300"
@@ -225,16 +225,16 @@ export default function Signup() {
                       type="button"
                       onClick={() =>
                         handleChange({
-                          target: { name: "role", value: "reviewer" },
+                          target: { name: "role", value: "assister" },
                         })
                       }
-                      className={`px-3 py-3 rounded-lg border-2 transition-all text-sm ${
-                        formData.role === "reviewer"
+                      className={`px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                        formData.role === "assister"
                           ? "border-purple-500 bg-purple-50 text-purple-700"
                           : "border-neutral-300 bg-white/50 text-neutral-700 hover:border-purple-300"
                       }`}
                     >
-                      Reviewer
+                      Assister
                     </button>
                   </div>
                   <p className="text-xs text-neutral-500 mt-2">
@@ -242,8 +242,8 @@ export default function Signup() {
                   </p>
                 </div>
 
-                {/* Specialty selection for Reviewer */}
-                {formData.role === "reviewer" && (
+                {/* Specialty selection for Assister */}
+                {formData.role === "assister" && (
                   <div className="space-y-3">
                     <label className="block text-sm font-medium text-neutral-700">
                       Your Specialty <span className="text-red-500">*</span>
@@ -255,7 +255,7 @@ export default function Signup() {
                       className="w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-neutral-300 rounded-lg text-neutral-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                     >
                       <option value="">Select your specialty</option>
-                      {REVIEWER_SPECIALTIES.map((spec) => (
+                      {ASSISTER_SPECIALTIES.map((spec) => (
                         <option key={spec} value={spec}>
                           {spec}
                         </option>
@@ -275,7 +275,7 @@ export default function Signup() {
                     )}
 
                     <p className="text-xs text-purple-600 bg-purple-50 p-2 rounded">
-                      As a reviewer, you'll be able to comment on and review proposal sections assigned to you by bidders.
+                      As an assister, you'll be assigned to proposal sections by bidders with either edit or comment-only permissions.
                     </p>
                   </div>
                 )}
@@ -298,16 +298,16 @@ export default function Signup() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    {formData.role === "reviewer" ? "Organization Name (Optional)" : "Organization Name"}
+                    {formData.role === "assister" ? "Organization Name (Optional)" : "Organization Name"}
                   </label>
                   <input
                     name="organizationName"
                     type="text"
-                    required={formData.role !== "reviewer"}
+                    required={formData.role !== "assister"}
                     value={formData.organizationName}
                     onChange={handleChange}
                     className="w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-neutral-300 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                    placeholder={formData.role === "reviewer" ? "Your company (optional)" : "Your organization"}
+                    placeholder={formData.role === "assister" ? "Your company (optional)" : "Your organization"}
                   />
                 </div>
 
@@ -324,7 +324,7 @@ export default function Signup() {
                   />
                 </div>
 
-                {formData.role !== "reviewer" && (
+                {formData.role !== "assister" && (
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-2">
                       Industry / Domain
@@ -340,7 +340,7 @@ export default function Signup() {
                   </div>
                 )}
 
-                {formData.role === "reviewer" && (
+                {formData.role === "assister" && (
                   <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
                     <p className="text-sm text-purple-800 font-medium mb-1">
                       Specialty: {formData.specialty === "Other" ? formData.customSpecialty : formData.specialty}

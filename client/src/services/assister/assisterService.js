@@ -1,6 +1,7 @@
 /**
- * Reviewer Service
- * Handles API calls for reviewer dashboard and section access
+ * Assister Service
+ * Handles API calls for assister dashboard and section access
+ * (Reuses reviewer routes but with assister-specific naming)
  */
 
 import axios from 'axios';
@@ -41,7 +42,7 @@ api.interceptors.response.use(
   }
 );
 
-export const reviewerService = {
+export const assisterService = {
   /**
    * Get all assignments for the current assister
    * Returns sections from both platform and uploaded tenders
@@ -126,4 +127,4 @@ export const reviewerService = {
   },
 };
 
-export default reviewerService;
+export default assisterService;

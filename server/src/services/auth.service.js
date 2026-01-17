@@ -9,13 +9,13 @@ const TOKEN_EXPIRY = '24h';
 export const AuthService = {
   async signup({ name, email, password, role, organizationName, specialty }) {
     // Validate role
-    if (!['AUTHORITY', 'BIDDER', 'REVIEWER'].includes(role)) {
-      throw new Error('Invalid role. Must be AUTHORITY, BIDDER, or REVIEWER');
+    if (!['AUTHORITY', 'BIDDER', 'ASSISTER'].includes(role)) {
+      throw new Error('Invalid role. Must be AUTHORITY, BIDDER, or ASSISTER');
     }
 
-    // Validate specialty for REVIEWER role
-    if (role === 'REVIEWER' && !specialty) {
-      throw new Error('Specialty is required for Reviewer role');
+    // Validate specialty for ASSISTER role
+    if (role === 'ASSISTER' && !specialty) {
+      throw new Error('Specialty is required for Assister role');
     }
 
     // Check if user already exists
@@ -28,8 +28,8 @@ export const AuthService = {
       throw new Error('Email already registered');
     }
 
-    // Create organization (for REVIEWER, use specialty as org name if no org provided)
-    const orgName = organizationName || (role === 'REVIEWER' ? `${name} - ${specialty}` : name);
+    // Create organization (for ASSISTER, use specialty as org name if no org provided)
+    const orgName = organizationName || (role === 'ASSISTER' ? `${name} - ${specialty}` : name);
     const orgResult = await pool.query(
       'INSERT INTO organization (name, type) VALUES ($1, $2) RETURNING organization_id',
       [orgName, role]
@@ -39,10 +39,11 @@ export const AuthService = {
     // Hash password
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // Create user with specialty if REVIEWER
+    // Create user with specialty if ASSISTER (will be NULL if column doesn't exist)
+    // Use basic insert without specialty column if it doesn't exist yet
     const userResult = await pool.query(
-      'INSERT INTO "user" (name, email, password_hash, role, organization_id, specialty) VALUES ($1, $2, $3, $4, $5, $6) RETURNING user_id, name, email, role, organization_id, specialty',
-      [name, email, passwordHash, role, organizationId, role === 'REVIEWER' ? specialty : null]
+      'INSERT INTO "user" (name, email, password_hash, role, organization_id) VALUES ($1, $2, $3, $4, $5) RETURNING user_id, name, email, role, organization_id',
+      [name, email, passwordHash, role, organizationId]
     );
 
     const user = userResult.rows[0];
@@ -67,15 +68,16 @@ export const AuthService = {
         role: user.role.toLowerCase(),
         organization: orgName,
         organizationId: user.organization_id,
-        specialty: user.specialty,
+        specialty: specialty || null,
       },
     };
   },
 
   async login(email, password) {
-    // Find user with organization and specialty
+    // Find user with organization
+    // Note: specialty column may not exist in all databases (Migration 016)
     const result = await pool.query(
-      `SELECT u.user_id, u.name, u.email, u.password_hash, u.role, u.organization_id, u.specialty, o.name as organization_name
+      `SELECT u.user_id, u.name, u.email, u.password_hash, u.role, u.organization_id, o.name as organization_name
        FROM "user" u
        JOIN organization o ON u.organization_id = o.organization_id
        WHERE u.email = $1`,

@@ -6,6 +6,7 @@ import SectionList from '../../components/proposal/SectionList';
 import ProposalEditor from '../../components/proposal/ProposalEditor';
 import ProposalAIAdvisor from '../../components/proposal/ProposalAIAdvisor';
 import Loading from '../../components/bidder-common/Loading';
+import AssignAssisterModal from '../../components/bidder/AssignAssisterModal';
 
 // New Components
 import { ProposalThemeProvider } from '../../context/ProposalThemeContext';
@@ -65,6 +66,8 @@ export default function ProposalWorkspace() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [showAssignAssisterModal, setShowAssignAssisterModal] = useState(false);
+  const [selectedSectionForAssignment, setSelectedSectionForAssignment] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -193,6 +196,19 @@ export default function ProposalWorkspace() {
   const handleSelectSection = (section) => {
     setActiveSection(section);
     announce(`Selected section: ${section.title || section.name}`);
+  };
+
+  // Handle assign assister
+  const handleOpenAssignAssisterModal = () => {
+    if (activeSection) {
+      setSelectedSectionForAssignment(activeSection);
+      setShowAssignAssisterModal(true);
+    }
+  };
+
+  const handleAssignAssisterSuccess = (data) => {
+    announce(`Assister ${data.user.name} assigned with ${data.permission === 'EDIT' ? 'edit' : 'comment-only'} permission`);
+    // Optionally refresh collaboration data or show confirmation
   };
 
   // Handle content change with auto-save debounce
@@ -448,6 +464,16 @@ export default function ProposalWorkspace() {
                 isExporting={isExporting}
               />
 
+              {/* Assign Assister Button */}
+              <button
+                onClick={handleOpenAssignAssisterModal}
+                disabled={isProposalSubmitted || !activeSection}
+                className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Assign an assister to this section"
+              >
+                👥 Assign
+              </button>
+
               {/* PDF Analyze & Collaboration */}
               <button
                 onClick={() => navigate(`/bidder/pdf-analyze?tenderId=${tenderId}&proposalId=${proposalId}`)}
@@ -593,6 +619,16 @@ export default function ProposalWorkspace() {
           isOpen={showShortcutsHelp}
           onClose={() => setShowShortcutsHelp(false)}
           shortcuts={shortcuts}
+        />
+
+        {/* Assign Assister Modal */}
+        <AssignAssisterModal
+          isOpen={showAssignAssisterModal}
+          onClose={() => setShowAssignAssisterModal(false)}
+          sectionId={selectedSectionForAssignment?._id || selectedSectionForAssignment?.id || selectedSectionForAssignment?.section_id}
+          sectionTitle={selectedSectionForAssignment?.title || selectedSectionForAssignment?.name || 'Section'}
+          proposalId={proposal?._id || proposal?.proposal_id}
+          onAssignSuccess={handleAssignAssisterSuccess}
         />
       </BidderLayout>
     </ProposalThemeProvider>

@@ -69,7 +69,13 @@ export default function UserAssignmentModal({
       setSearchQuery('');
       setSearchResults([]);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to assign user');
+      const msg = err.response?.data?.error || err.message || 'Failed to assign user';
+      // Friendlier guidance for missing uploaded tender id
+      if (msg.includes('uploadedTenderId is required')) {
+        setError('Please save this uploaded tender first before assigning users. Go to Proposal tab and save, or re-run analysis to let it auto-save.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setAssigning(false);
     }

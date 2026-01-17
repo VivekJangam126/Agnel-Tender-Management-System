@@ -37,6 +37,7 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import bidderRoutes from './routes/bidder.routes.js';
 import pdfAnalysisRoutes from './routes/pdfAnalysis.routes.js';
 import collaborationRoutes from './routes/collaboration.routes.js';
+import reviewerRoutes from './routes/reviewer.routes.js'; // Assister routes
 
 // Error handler
 import { errorHandler } from './middlewares/error.middleware.js';
@@ -58,7 +59,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.json());
+// Increase JSON body size limit to accommodate analyzed sections payloads
+app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
@@ -72,6 +74,7 @@ app.use('/api/evaluation', evaluationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/pdf', pdfAnalysisRoutes);
 app.use('/api/collaboration', collaborationRoutes);
+app.use('/api/assister', reviewerRoutes); // Assister routes (reuses reviewer route handlers)
 
 // 404 handler
 app.use((req, res) => {

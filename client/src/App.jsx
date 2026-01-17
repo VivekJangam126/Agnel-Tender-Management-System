@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import PublicLayout from "./layouts/PublicLayout";
 import AdminLayout from "./layouts/AdminLayout";
+import AssisterLayout from "./layouts/AssisterLayout";
 import ProtectedRoute from "./components/shared/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -38,6 +39,7 @@ import Analytics from "./pages/admin/Analytics/Analytics";
 import Profile from "./pages/admin/Profile/Profile";
 import BidEvaluationList from "./pages/admin/BidEvaluation/BidEvaluationList";
 import BidEvaluation from "./pages/admin/BidEvaluation/BidEvaluation";
+import AssisterDashboard from "./pages/assister/AssisterDashboard";
 
 // Landing Page Component
 function LandingPage() {
@@ -100,6 +102,13 @@ export default function App() {
             <Route path="/bidder/uploaded-tenders/:id/analyze" element={<UploadedTenderAnalysis />} />
             <Route path="/bidder/proposal/:tenderId/collaborate" element={<CollaborativeProposalWorkspace />} />
             <Route path="/bidder/uploaded-tenders/:uploadedTenderId/collaborate" element={<CollaborativeProposalWorkspace />} />
+          </Route>
+
+          {/* Assister Routes - Protected with assister role */}
+          <Route element={<ProtectedRoute allowedRoles={["assister"]} />}>
+            <Route path="/assister" element={<AssisterLayout />}>
+              <Route path="dashboard" element={<AssisterDashboard />} />
+            </Route>
           </Route>
 
           {/* Fallback */}

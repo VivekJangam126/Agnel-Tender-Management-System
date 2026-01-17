@@ -137,6 +137,19 @@ export function CollaborationProvider({
    */
   const assignUser = useCallback(async (sectionId, userId, permission) => {
     try {
+      // Validate inputs
+      if (!sectionId || !userId) {
+        throw new Error('sectionId and userId are required');
+      }
+
+      // Validate tender/proposal ID
+      if (tenderType === 'platform' && !proposalId) {
+        throw new Error('proposalId is required for platform tenders');
+      }
+      if (tenderType === 'uploaded' && !uploadedTenderId) {
+        throw new Error('uploadedTenderId is required for uploaded tenders');
+      }
+
       let result;
       if (tenderType === 'platform') {
         result = await collaborationService.assignUser(proposalId, sectionId, userId, permission);

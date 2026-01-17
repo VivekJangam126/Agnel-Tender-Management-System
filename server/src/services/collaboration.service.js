@@ -13,7 +13,7 @@ export const CollaborationService = {
 
   /**
    * Search users by email within the same organization
-   * Returns: [{user_id, name, email}] - NO internal roles exposed
+   * Returns: [{user_id, name, email, role}] - filtered to ASSISTER role
    */
   async searchUsersByEmail(email, organizationId, limit = 10) {
     if (!email || email.length < 3) {
@@ -21,13 +21,36 @@ export const CollaborationService = {
     }
 
     const result = await pool.query(
-      `SELECT user_id, name, email
+      `SELECT user_id, name, email, role
        FROM "user"
        WHERE organization_id = $1
+         AND role = 'ASSISTER'
          AND LOWER(email) LIKE LOWER($2)
        ORDER BY name ASC
        LIMIT $3`,
       [organizationId, `%${email}%`, limit]
+    );
+
+    return result.rows;
+  },
+
+  /**
+   * Search assisters by email across all organizations
+   * Returns: [{user_id, name, email, role}] - filtered to ASSISTER role
+   */
+  async searchAssistersByEmail(email, limit = 10) {
+    if (!email || email.length < 3) {
+      return [];
+    }
+
+    const result = await pool.query(
+      `SELECT user_id, name, email, role
+       FROM "user"
+       WHERE role = 'ASSISTER'
+         AND LOWER(email) LIKE LOWER($1)
+       ORDER BY name ASC
+       LIMIT $2`,
+      [`%${email}%`, limit]
     );
 
     return result.rows;

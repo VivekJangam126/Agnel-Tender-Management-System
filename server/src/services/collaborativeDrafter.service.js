@@ -13,7 +13,7 @@ import { pool } from '../config/db.js';
 import { EmbeddingService } from './embedding.service.js';
 import { RAGOrchestrator } from '../utils/ragOrchestrator.js';
 import { CollaborationService } from './collaboration.service.js';
-import { callLLM } from '../utils/llmCaller.js';
+import { LLMCaller } from '../utils/llmCaller.js';
 
 // Section type mapping for RAG queries
 const SECTION_TYPE_MAPPING = {
@@ -205,7 +205,9 @@ export const CollaborativeDrafterService = {
     console.log(`[CollaborativeDrafter] Calling LLM for ${sectionInfo.type} section...`);
 
     // Call LLM
-    const draft = await callLLM(systemPrompt, userPrompt, {
+    const draft = await LLMCaller.call({
+      systemPrompt,
+      userPrompt,
       provider: 'groq',
       model: 'llama-3.3-70b-versatile',
       temperature: 0.4,
@@ -593,16 +595,14 @@ Analyze and return a JSON object with:
 
 Be strict about addressing all requirements. Return ONLY valid JSON.`;
 
-      const result = await callLLM(
-        'You are a tender compliance auditor. Analyze proposal sections for completeness and compliance. Return only valid JSON.',
-        validationPrompt,
-        {
-          provider: 'groq',
-          model: 'llama-3.3-70b-versatile',
-          temperature: 0.1,
-          maxTokens: 500,
-        }
-      );
+      const result = await LLMCaller.call({
+        systemPrompt: 'You are a tender compliance auditor. Analyze proposal sections for completeness and compliance. Return only valid JSON.',
+        userPrompt: validationPrompt,
+        provider: 'groq',
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.1,
+        maxTokens: 500,
+      });
 
       // Parse JSON response
       const parsed = this._parseJSONResponse(result);

@@ -33,6 +33,16 @@ export const pdfAnalysisService = {
   },
 
   /**
+   * Create uploaded tender record from analysis data
+   * @param {Object} data - { title, description, originalFilename?, fileSize?, parsedData?, analysisData?, metadata? }
+   * @returns {Promise<Object>} Created tender
+   */
+  async createUploadedTender(data) {
+    const response = await api.post('/bidder/uploaded-tenders', data);
+    return response.data;
+  },
+
+  /**
    * Evaluate a proposal against tender requirements
    * UPDATED: Sends only sessionId and minimal proposal data (no large payloads)
    * @param {string} sessionId - Analysis session ID

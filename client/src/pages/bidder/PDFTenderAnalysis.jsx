@@ -356,6 +356,7 @@ function CollaborativeProposalTab({
               onContentChange={handleContentChange}
               onSave={handleSave}
               proposalId={savedTenderId}
+              uploadedTenderId={savedTenderId}
               saving={saving}
               lastSaved={lastSaved[activeSectionId]}
             />
@@ -494,6 +495,38 @@ export default function PDFTenderAnalysis() {
           setShowSavedNotification(true);
           // Auto-hide notification after 5 seconds
           setTimeout(() => setShowSavedNotification(false), 5000);
+        } else {
+          // Auto-create uploaded tender so assignments don't depend on manual save
+          try {
+            // Build a minimal payload to stay well under body-size limits
+            const minimalSections = (result.data?.proposalDraft?.sections || []).map(s => ({
+              id: s.id,
+              title: s.title,
+              content: s.content,
+              wordCount: s.wordCount,
+            }));
+
+            const createResp = await pdfAnalysisService.createUploadedTender({
+              title: result.data?.parsed?.title || 'Uploaded Tender',
+              description: result.data?.summary?.executiveSummary?.substring(0, 500) || '',
+              originalFilename: null,
+              fileSize: null,
+              // Avoid sending full parsed/summary blobs to keep request small
+              parsedData: {},
+              analysisData: {
+                proposalDraft: { sections: minimalSections },
+              },
+              metadata: result.data?.parsed?.metadata || {},
+            });
+
+            if (createResp?.success && createResp?.data?.id) {
+              setSavedTenderId(createResp.data.id);
+              setShowSavedNotification(true);
+              setTimeout(() => setShowSavedNotification(false), 5000);
+            }
+          } catch (autoCreateErr) {
+            console.error('[PDFTenderAnalysis] Auto-create uploaded tender failed:', autoCreateErr?.message || autoCreateErr);
+          }
         }
       } else {
         throw new Error(result.error || 'Analysis failed');

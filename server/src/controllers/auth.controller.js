@@ -2,12 +2,20 @@ import { AuthService } from '../services/auth.service.js';
 
 export async function signup(req, res, next) {
   try {
-    const { name, email, password, role, organizationName } = req.body;
+    const { name, email, password, role, organizationName, specialty } = req.body;
 
     // Input validation
-    if (!name || !email || !password || !role || !organizationName) {
+    if (!name || !email || !password || !role) {
       return res.status(400).json({
-        error: 'Missing required fields: name, email, password, role, organizationName',
+        error: 'Missing required fields: name, email, password, role',
+      });
+    }
+
+    // organizationName is optional for ASSISTER
+    // but required for AUTHORITY/BIDDER
+    if (['AUTHORITY', 'BIDDER'].includes(role) && !organizationName) {
+      return res.status(400).json({
+        error: 'Missing required field: organizationName',
       });
     }
 
@@ -23,8 +31,13 @@ export async function signup(req, res, next) {
     }
 
     // Role validation
-    if (!['AUTHORITY', 'BIDDER'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be AUTHORITY or BIDDER' });
+    if (!['AUTHORITY', 'BIDDER', 'ASSISTER'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be AUTHORITY, BIDDER, or ASSISTER' });
+    }
+
+    // Specialty validation for ASSISTER
+    if (role === 'ASSISTER' && !specialty) {
+      return res.status(400).json({ error: 'Specialty is required for ASSISTER role' });
     }
 
     const result = await AuthService.signup({
@@ -33,6 +46,7 @@ export async function signup(req, res, next) {
       password,
       role,
       organizationName,
+      specialty,
     });
 
     res.status(201).json(result);

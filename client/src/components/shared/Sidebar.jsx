@@ -32,13 +32,12 @@ const bidderMenu = [
   { label: "History", href: "/bidder/history", icon: Clock, rootPath: "/bidder/history" },
   { label: "Profile", href: "/bidder/profile", icon: Settings, rootPath: "/bidder/profile" },
     { label: "Profile", href: "/bidder/profile", icon: Settings, rootPath: "/bidder/profile" },
-  
 ];
 
-const reviewerMenu = [
-  { label: "Dashboard", href: "/reviewer/dashboard", icon: LayoutDashboard, rootPath: "/reviewer/dashboard" },
-  { label: "My Assignments", href: "/reviewer/assignments", icon: ClipboardList, rootPath: "/reviewer/assignments" },
-  { label: "Profile", href: "/reviewer/profile", icon: Settings, rootPath: "/reviewer/profile" },
+const assisterMenu = [
+  { label: "Dashboard", href: "/assister/dashboard", icon: LayoutDashboard, rootPath: "/assister/dashboard" },
+  { label: "My Assignments", href: "/assister/assignments", icon: ClipboardList, rootPath: "/assister/assignments" },
+  { label: "Profile", href: "/assister/profile", icon: Settings, rootPath: "/assister/profile" },
 ];
 
 /**
@@ -59,8 +58,8 @@ export default function Sidebar({ role = "admin" }) {
   // Select menu based on role
   const menu = role === "admin"
     ? adminMenu
-    : role === "reviewer"
-    ? reviewerMenu
+    : role === "assister"
+    ? assisterMenu
     : bidderMenu;
 
   const user = JSON.parse(localStorage.getItem("tms_user") || "{}");
@@ -71,7 +70,7 @@ export default function Sidebar({ role = "admin" }) {
     navigate("/login");
   };
 
-  const roleLabel = role === "admin" ? "Authority" : role === "reviewer" ? "Reviewer" : "Bidder";
+  const roleLabel = role === "admin" ? "Authority" : role === "assister" ? "Assister" : "Bidder";
 
   return (
     <aside className="w-64 h-screen bg-white border-r border-neutral-200 flex flex-col fixed top-0 left-0 overflow-y-auto shadow-sm">

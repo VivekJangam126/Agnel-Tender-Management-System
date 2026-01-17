@@ -26,7 +26,7 @@ const router = Router();
 
 /**
  * GET /api/collaboration/users/search
- * Search users by email within the same organization
+ * Search assisters by email (can be from any organization)
  * Query params: email (min 3 chars)
  */
 router.get('/users/search', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
@@ -39,11 +39,8 @@ router.get('/users/search', requireAuth, requireRole('BIDDER'), async (req, res,
       });
     }
 
-    const users = await CollaborationService.searchUsersByEmail(
-      email,
-      req.user.organizationId,
-      10
-    );
+    // Search ALL assisters system-wide (not limited to same organization)
+    const users = await CollaborationService.searchAssistersByEmail(email, 10);
 
     // Filter out the current user from results
     const filteredUsers = users.filter(u => u.user_id !== req.user.id);
@@ -361,6 +358,7 @@ router.get('/proposals/:id/comment-counts', requireAuth, requireRole('BIDDER'), 
 /**
  * POST /api/collaboration/proposals/:id/sections/:sectionId/generate-draft
  * Generate AI draft for a section
+ * Requires EDIT permission (not READ_AND_COMMENT)
  * Body: { customInstructions? }
  */
 router.post(
@@ -373,6 +371,17 @@ router.post(
     try {
       const { id: proposalId, sectionId } = req.params;
       const { customInstructions } = req.body;
+
+      // Double-check permission at service layer
+      const permission = req.sectionPermission;
+      if (permission !== 'OWNER' && permission !== 'EDIT') {
+        return res.status(403).json({
+          error: 'Insufficient permission',
+          message: 'You have comment-only access to this section. AI drafting is only available with edit permission.',
+          required: 'EDIT',
+          actual: permission,
+        });
+      }
 
       const result = await CollaborativeDrafterService.generateSectionDraft({
         proposalId,
@@ -649,6 +658,8 @@ router.post(
 
 /**
  * POST /api/collaboration/uploaded-tenders/:uploadedTenderId/sections/:sectionKey/generate-draft
+ * Generate AI draft for uploaded tender section
+ * Requires EDIT permission (not READ_AND_COMMENT)
  */
 router.post(
   '/uploaded-tenders/:uploadedTenderId/sections/:sectionKey/generate-draft',
@@ -660,6 +671,17 @@ router.post(
     try {
       const { uploadedTenderId, sectionKey } = req.params;
       const { customInstructions } = req.body;
+
+      // Double-check permission at service layer
+      const permission = req.sectionPermission;
+      if (permission !== 'OWNER' && permission !== 'EDIT') {
+        return res.status(403).json({
+          error: 'Insufficient permission',
+          message: 'You have comment-only access to this section. AI drafting is only available with edit permission.',
+          required: 'EDIT',
+          actual: permission,
+        });
+      }
 
       const result = await CollaborativeDrafterService.generateSectionDraft({
         proposalId: null,

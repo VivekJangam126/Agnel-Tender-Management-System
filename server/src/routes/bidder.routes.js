@@ -1310,6 +1310,65 @@ router.get('/uploaded-tenders', requireAuth, requireRole('BIDDER'), async (req, 
 });
 
 /**
+ * POST /api/bidder/uploaded-tenders
+ * Create uploaded tender record from client analysis data
+ * Body: { title, description, originalFilename?, fileSize?, parsedData?, analysisData?, metadata? }
+ */
+router.post('/uploaded-tenders', requireAuth, requireRole('BIDDER'), async (req, res, next) => {
+  try {
+    const {
+      title,
+      description,
+      originalFilename = null,
+      fileSize = null,
+      parsedData = {},
+      analysisData = {},
+      metadata = {},
+    } = req.body;
+
+    if (!title) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    const created = await UploadedTenderService.create(
+      {
+        title,
+        description,
+        source: 'PDF_UPLOAD',
+        originalFilename,
+        fileSize,
+        parsedData,
+        analysisData,
+        metadata,
+      },
+      req.user.userId,
+      req.user.organizationId
+    );
+    // If proposalDraft sections exist, persist an initial draft for the owner
+    try {
+      const sections = analysisData?.proposalDraft?.sections || [];
+      if (Array.isArray(sections) && sections.length > 0) {
+        await UploadedProposalDraftService.upsert(
+          {
+            uploadedTenderId: created.id,
+            sections,
+            title: title,
+          },
+          req.user.userId,
+          req.user.organizationId
+        );
+      }
+    } catch (draftErr) {
+      console.error('[Bidder] Failed to upsert initial uploaded proposal draft:', draftErr.message);
+    }
+
+    res.status(201).json({ success: true, data: created });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * DELETE /api/bidder/uploaded-tenders/:id
  * Delete an uploaded tender
  */

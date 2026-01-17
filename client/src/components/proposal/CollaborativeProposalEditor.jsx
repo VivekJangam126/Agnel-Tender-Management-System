@@ -32,6 +32,7 @@ export default function CollaborativeProposalEditor({
   onContentChange,
   onSave,
   proposalId,
+  uploadedTenderId, // Added for uploaded tender support
   saving = false,
   lastSaved = null,
 }) {

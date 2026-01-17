@@ -1,22 +1,26 @@
 /**
- * Reviewer Routes
- * Handles reviewer-specific endpoints:
- * - Get all assignments for the logged-in reviewer
- * - Access section content based on permissions
+ * Reviewer / Commenter Routes
+ * Handles reviewer and commenter endpoints:
+ * - Get all assignments for the logged-in user
+ * - Access section content based on section permissions
+ *
+ * IMPORTANT: Uses section assignment permissions (EDIT / READ_AND_COMMENT)
+ * NOT user role. Roles are for routing only.
  */
 
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware.js';
-import { requireRole } from '../middlewares/role.middleware.js';
 import { pool } from '../config/db.js';
+import { PermissionService } from '../services/permission.service.js';
 
 const router = Router();
 
 /**
  * GET /api/reviewer/assignments
- * Get all section assignments for the current reviewer
+ * Get all section assignments for the current reviewer/commenter
+ * No role requirement - works for REVIEWER and COMMENTER roles
  */
-router.get('/assignments', requireAuth, requireRole('REVIEWER'), async (req, res, next) => {
+router.get('/assignments', requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
@@ -88,18 +92,20 @@ router.get('/assignments', requireAuth, requireRole('REVIEWER'), async (req, res
         assignments: allAssignments,
         stats,
       },
+      message: allAssignments.length === 0 ? 'No sections allotted yet' : undefined,
     });
   } catch (err) {
-    console.error('[Reviewer] Get assignments error:', err);
+    console.error('[Reviewer/Commenter] Get assignments error:', err);
     next(err);
   }
 });
 
 /**
  * GET /api/reviewer/proposals/:proposalId/sections/:sectionId
- * Get section content for review (platform tender)
+ * Get section content for review/comment (platform tender)
+ * Requires EDIT or READ_AND_COMMENT permission
  */
-router.get('/proposals/:proposalId/sections/:sectionId', requireAuth, requireRole('REVIEWER'), async (req, res, next) => {
+router.get('/proposals/:proposalId/sections/:sectionId', requireAuth, async (req, res, next) => {
   try {
     const { proposalId, sectionId } = req.params;
     const userId = req.user.id;
@@ -150,11 +156,11 @@ router.get('/proposals/:proposalId/sections/:sectionId', requireAuth, requireRol
         ...sectionResult.rows[0],
         permission,
         canEdit: permission === 'EDIT',
-        canComment: true,
+        canComment: ['EDIT', 'READ_AND_COMMENT'].includes(permission),
       },
     });
   } catch (err) {
-    console.error('[Reviewer] Get section error:', err);
+    console.error('[Reviewer/Commenter] Get section error:', err);
     next(err);
   }
 });
@@ -163,7 +169,7 @@ router.get('/proposals/:proposalId/sections/:sectionId', requireAuth, requireRol
  * PUT /api/reviewer/proposals/:proposalId/sections/:sectionId
  * Update section content (requires EDIT permission)
  */
-router.put('/proposals/:proposalId/sections/:sectionId', requireAuth, requireRole('REVIEWER'), async (req, res, next) => {
+router.put('/proposals/:proposalId/sections/:sectionId', requireAuth, async (req, res, next) => {
   try {
     const { proposalId, sectionId } = req.params;
     const { content } = req.body;
@@ -186,7 +192,7 @@ router.put('/proposals/:proposalId/sections/:sectionId', requireAuth, requireRol
     if (permissionCheck.rows[0].permission !== 'EDIT') {
       return res.status(403).json({
         error: 'Permission denied',
-        message: 'You do not have edit permission for this section',
+        message: 'You have comment-only access to this section. You cannot edit content.',
       });
     }
 
@@ -206,16 +212,17 @@ router.put('/proposals/:proposalId/sections/:sectionId', requireAuth, requireRol
       message: 'Section updated successfully',
     });
   } catch (err) {
-    console.error('[Reviewer] Update section error:', err);
+    console.error('[Reviewer/Commenter] Update section error:', err);
     next(err);
   }
 });
 
 /**
  * GET /api/reviewer/uploaded-tenders/:uploadedTenderId/sections/:sectionKey
- * Get section content for review (uploaded tender)
+ * Get section content for review/comment (uploaded tender)
+ * Requires EDIT or READ_AND_COMMENT permission
  */
-router.get('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAuth, requireRole('REVIEWER'), async (req, res, next) => {
+router.get('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAuth, async (req, res, next) => {
   try {
     const { uploadedTenderId, sectionKey } = req.params;
     const userId = req.user.id;
@@ -280,20 +287,20 @@ router.get('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAu
         tender_title: tender.title,
         permission,
         canEdit: permission === 'EDIT',
-        canComment: true,
+        canComment: ['EDIT', 'READ_AND_COMMENT'].includes(permission),
       },
     });
   } catch (err) {
-    console.error('[Reviewer] Get uploaded section error:', err);
+    console.error('[Reviewer/Commenter] Get uploaded section error:', err);
     next(err);
   }
 });
 
 /**
  * PUT /api/reviewer/uploaded-tenders/:uploadedTenderId/sections/:sectionKey
- * Update uploaded tender section content
+ * Update uploaded tender section content (requires EDIT permission)
  */
-router.put('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAuth, requireRole('REVIEWER'), async (req, res, next) => {
+router.put('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAuth, async (req, res, next) => {
   try {
     const { uploadedTenderId, sectionKey } = req.params;
     const { content } = req.body;
@@ -316,7 +323,7 @@ router.put('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAu
     if (permissionCheck.rows[0].permission !== 'EDIT') {
       return res.status(403).json({
         error: 'Permission denied',
-        message: 'You do not have edit permission for this section',
+        message: 'You have comment-only access to this section. You cannot edit content.',
       });
     }
 
@@ -336,7 +343,250 @@ router.put('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey', requireAu
       message: 'Section updated successfully',
     });
   } catch (err) {
-    console.error('[Reviewer] Update uploaded section error:', err);
+    console.error('[Reviewer/Commenter] Update uploaded section error:', err);
+    next(err);
+  }
+});
+
+// ==========================================
+// REVIEWER/COMMENTER - COMMENTS
+// ==========================================
+
+/**
+ * GET /api/reviewer/proposals/:proposalId/sections/:sectionId/comments
+ * Get all comments for a platform tender section
+ */
+router.get('/proposals/:proposalId/sections/:sectionId/comments', requireAuth, async (req, res, next) => {
+  try {
+    const { proposalId, sectionId } = req.params;
+    const userId = req.user.id;
+
+    // Verify user has access to this section
+    const permissionCheck = await pool.query(
+      `SELECT permission FROM proposal_collaborator
+       WHERE proposal_id = $1 AND section_id = $2 AND user_id = $3`,
+      [proposalId, sectionId, userId]
+    );
+
+    if (permissionCheck.rows.length === 0) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'You are not assigned to this section',
+      });
+    }
+
+    // Get all comments for the section
+    const comments = await pool.query(
+      `SELECT
+        c.comment_id,
+        c.content,
+        c.created_at,
+        c.updated_at,
+        c.user_id,
+        c.parent_comment_id,
+        c.quoted_text,
+        c.selection_start,
+        c.selection_end,
+        c.is_resolved,
+        c.resolved_at,
+        u.email,
+        u.full_name
+       FROM proposal_comment c
+       JOIN "user" u ON c.user_id = u.user_id
+       WHERE c.proposal_id = $1 AND c.section_id = $2
+       ORDER BY c.created_at DESC`,
+      [proposalId, sectionId]
+    );
+
+    res.json({
+      success: true,
+      data: comments.rows,
+    });
+  } catch (err) {
+    console.error('[Reviewer/Commenter] Get comments error:', err);
+    next(err);
+  }
+});
+
+/**
+ * POST /api/reviewer/proposals/:proposalId/sections/:sectionId/comments
+ * Create a comment on a platform tender section
+ * Body: { content, parentCommentId?, quotedText?, selectionStart?, selectionEnd? }
+ */
+router.post('/proposals/:proposalId/sections/:sectionId/comments', requireAuth, async (req, res, next) => {
+  try {
+    const { proposalId, sectionId } = req.params;
+    const { content, parentCommentId, quotedText, selectionStart, selectionEnd } = req.body;
+    const userId = req.user.id;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Comment content is required' });
+    }
+
+    // Verify user has comment permission
+    const permissionCheck = await pool.query(
+      `SELECT permission FROM proposal_collaborator
+       WHERE proposal_id = $1 AND section_id = $2 AND user_id = $3`,
+      [proposalId, sectionId, userId]
+    );
+
+    if (permissionCheck.rows.length === 0) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'You are not assigned to this section',
+      });
+    }
+
+    // Verify permission is EDIT or READ_AND_COMMENT
+    const permission = permissionCheck.rows[0].permission;
+    if (!['EDIT', 'READ_AND_COMMENT'].includes(permission)) {
+      return res.status(403).json({
+        error: 'Insufficient permission',
+        message: 'You do not have permission to comment on this section',
+      });
+    }
+
+    // Create comment
+    const result = await pool.query(
+      `INSERT INTO proposal_comment (proposal_id, section_id, user_id, content, parent_comment_id, quoted_text, selection_start, selection_end)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [proposalId, sectionId, userId, content, parentCommentId || null, quotedText || null, selectionStart || null, selectionEnd || null]
+    );
+
+    res.status(201).json({
+      success: true,
+      data: result.rows[0],
+      message: 'Comment created successfully',
+    });
+  } catch (err) {
+    console.error('[Reviewer/Commenter] Create comment error:', err);
+    next(err);
+  }
+});
+
+/**
+ * GET /api/reviewer/uploaded-tenders/:uploadedTenderId/sections/:sectionKey/comments
+ * Get all comments for an uploaded tender section
+ */
+router.get('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey/comments', requireAuth, async (req, res, next) => {
+  try {
+    const { uploadedTenderId, sectionKey } = req.params;
+    const userId = req.user.id;
+
+    // Verify user has access
+    const permissionCheck = await pool.query(
+      `SELECT permission FROM uploaded_proposal_collaborator
+       WHERE uploaded_tender_id = $1 AND section_key = $2 AND user_id = $3`,
+      [uploadedTenderId, sectionKey, userId]
+    );
+
+    if (permissionCheck.rows.length === 0) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'You are not assigned to this section',
+      });
+    }
+
+    // Get comments (using section_key as identifier)
+    const comments = await pool.query(
+      `SELECT
+        c.comment_id,
+        c.content,
+        c.created_at,
+        c.updated_at,
+        c.user_id,
+        c.parent_comment_id,
+        c.quoted_text,
+        c.selection_start,
+        c.selection_end,
+        c.is_resolved,
+        c.resolved_at,
+        u.email,
+        u.full_name
+       FROM uploaded_proposal_comment c
+       JOIN "user" u ON c.user_id = u.user_id
+       WHERE c.uploaded_tender_id = $1 AND c.section_key = $2
+       ORDER BY c.created_at DESC`,
+      [uploadedTenderId, sectionKey]
+    );
+
+    res.json({
+      success: true,
+      data: comments.rows,
+    });
+  } catch (err) {
+    // Table might not exist yet, return empty array
+    if (err.code === '42P01') {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+    console.error('[Reviewer/Commenter] Get uploaded comments error:', err);
+    next(err);
+  }
+});
+
+/**
+ * POST /api/reviewer/uploaded-tenders/:uploadedTenderId/sections/:sectionKey/comments
+ * Create a comment on an uploaded tender section
+ */
+router.post('/uploaded-tenders/:uploadedTenderId/sections/:sectionKey/comments', requireAuth, async (req, res, next) => {
+  try {
+    const { uploadedTenderId, sectionKey } = req.params;
+    const { content, parentCommentId, quotedText, selectionStart, selectionEnd } = req.body;
+    const userId = req.user.id;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Comment content is required' });
+    }
+
+    // Verify permission
+    const permissionCheck = await pool.query(
+      `SELECT permission FROM uploaded_proposal_collaborator
+       WHERE uploaded_tender_id = $1 AND section_key = $2 AND user_id = $3`,
+      [uploadedTenderId, sectionKey, userId]
+    );
+
+    if (permissionCheck.rows.length === 0) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'You are not assigned to this section',
+      });
+    }
+
+    const permission = permissionCheck.rows[0].permission;
+    if (!['EDIT', 'READ_AND_COMMENT'].includes(permission)) {
+      return res.status(403).json({
+        error: 'Insufficient permission',
+        message: 'You do not have permission to comment on this section',
+      });
+    }
+
+    // Create comment
+    const result = await pool.query(
+      `INSERT INTO uploaded_proposal_comment (uploaded_tender_id, section_key, user_id, content, parent_comment_id, quoted_text, selection_start, selection_end)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [uploadedTenderId, sectionKey, userId, content, parentCommentId || null, quotedText || null, selectionStart || null, selectionEnd || null]
+    );
+
+    res.status(201).json({
+      success: true,
+      data: result.rows[0],
+      message: 'Comment created successfully',
+    });
+  } catch (err) {
+    // Table might not exist, create it
+    if (err.code === '42P01') {
+      console.log('[Reviewer/Commenter] uploaded_proposal_comment table does not exist yet');
+      return res.status(501).json({
+        error: 'Comment feature not yet available for uploaded tenders',
+        message: 'Database table not initialized',
+      });
+    }
+    console.error('[Reviewer/Commenter] Create uploaded comment error:', err);
     next(err);
   }
 });
