@@ -53,6 +53,9 @@ export default function BidderTenderDiscovery() {
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
 
+  // Saved tenders state
+  const [savedTenderIds, setSavedTenderIds] = useState({ platformTenderIds: [], uploadedTenderIds: [] });
+
   const governmentPortals = [
     {
       id: 'mahatenders',
@@ -76,9 +79,25 @@ export default function BidderTenderDiscovery() {
     }
   ];
 
+  // Fetch saved tender IDs on mount
+  useEffect(() => {
+    fetchSavedIds();
+  }, []);
+
   useEffect(() => {
     fetchTenders();
   }, [page, filters, searchQuery]);
+
+  const fetchSavedIds = async () => {
+    try {
+      const response = await tenderService.getSavedTenderIds();
+      if (response.data?.success) {
+        setSavedTenderIds(response.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved tender IDs:', err);
+    }
+  };
 
   const fetchTenders = async () => {
     try {
@@ -113,8 +132,13 @@ export default function BidderTenderDiscovery() {
     }
   };
 
-  const handleViewTender = (tenderId) => {
-    navigate(`/bidder/tenders/${tenderId}/analyze`);
+  const handleViewTender = (tender) => {
+    // Handle uploaded tenders differently - navigate to PDF analysis view
+    if (tender.isUploaded) {
+      navigate(`/bidder/uploaded-tenders/${tender._id}/analyze`);
+    } else {
+      navigate(`/bidder/tenders/${tender._id}/analyze`);
+    }
   };
 
   // Format total value for display
@@ -408,7 +432,12 @@ export default function BidderTenderDiscovery() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
             <p className="text-sm sm:text-base text-slate-600">
-              Showing <span className="font-semibold text-slate-900">{tenders.length}</span> platform tenders
+              Showing <span className="font-semibold text-slate-900">{tenders.length}</span> tenders
+              {statistics?.uploadedTenders > 0 && (
+                <span className="ml-1">
+                  (<span className="text-purple-600 font-medium">{statistics.uploadedTenders} uploaded</span>)
+                </span>
+              )}
             </p>
             <div className="flex gap-2">
               <button 
@@ -451,16 +480,41 @@ export default function BidderTenderDiscovery() {
 
           {tenders.length > 0 && (
             <div className={selectedView === 'grid' ? 'grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-6' : 'space-y-4'}>
-              {tenders.map((tender) => (
-                <div key={tender._id} onClick={() => handleViewTender(tender._id)} className="cursor-pointer">
-                  <TenderCard 
-                    tender={tender}
-                    getUrgencyColor={getUrgencyColor}
-                    getCompetitionLevel={getCompetitionLevel}
-                    onViewDetails={() => handleViewTender(tender._id)}
-                  />
-                </div>
-              ))}
+              {tenders.map((tender) => {
+                const isUploaded = tender.isUploaded === true;
+                const isSaved = isUploaded
+                  ? savedTenderIds.uploadedTenderIds.includes(tender._id)
+                  : savedTenderIds.platformTenderIds.includes(tender._id);
+
+                return (
+                  <div key={tender._id} onClick={() => handleViewTender(tender)} className="cursor-pointer">
+                    <TenderCard
+                      tender={tender}
+                      getUrgencyColor={getUrgencyColor}
+                      getCompetitionLevel={getCompetitionLevel}
+                      onViewDetails={() => handleViewTender(tender)}
+                      initialSaved={isSaved}
+                      onSaveToggle={(id, saved) => {
+                        if (saved) {
+                          setSavedTenderIds(prev => ({
+                            ...prev,
+                            [isUploaded ? 'uploadedTenderIds' : 'platformTenderIds']: [
+                              ...prev[isUploaded ? 'uploadedTenderIds' : 'platformTenderIds'],
+                              id
+                            ]
+                          }));
+                        } else {
+                          setSavedTenderIds(prev => ({
+                            ...prev,
+                            [isUploaded ? 'uploadedTenderIds' : 'platformTenderIds']:
+                              prev[isUploaded ? 'uploadedTenderIds' : 'platformTenderIds'].filter(tid => tid !== id)
+                          }));
+                        }
+                      }}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
 

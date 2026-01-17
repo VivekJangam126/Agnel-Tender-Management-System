@@ -13,6 +13,43 @@ export const tenderService = {
     return response;
   },
 
+  // ==========================================
+  // SAVED TENDERS
+  // ==========================================
+
+  // Get all saved tenders
+  getSavedTenders: async (params = {}) => {
+    const response = await api.get('/bidder/saved-tenders', { params });
+    return response;
+  },
+
+  // Get saved tender IDs for quick lookup
+  getSavedTenderIds: async () => {
+    const response = await api.get('/bidder/saved-tenders/ids');
+    return response;
+  },
+
+  // Save a tender
+  saveTender: async (tenderId, isUploaded = false) => {
+    const body = isUploaded ? { uploadedTenderId: tenderId } : { tenderId };
+    const response = await api.post('/bidder/saved-tenders', body);
+    return response;
+  },
+
+  // Unsave a tender
+  unsaveTender: async (tenderId, isUploaded = false) => {
+    const body = isUploaded ? { uploadedTenderId: tenderId } : { tenderId };
+    const response = await api.delete('/bidder/saved-tenders', { data: body });
+    return response;
+  },
+
+  // Toggle save status
+  toggleSaveTender: async (tenderId, isUploaded = false) => {
+    const body = isUploaded ? { uploadedTenderId: tenderId } : { tenderId };
+    const response = await api.post('/bidder/saved-tenders/toggle', body);
+    return response;
+  },
+
   // Other methods (authority-side, not used by bidder UI but keeping for completeness)
   createTender: async (data) => {
     const response = await api.post('/tenders', data);
