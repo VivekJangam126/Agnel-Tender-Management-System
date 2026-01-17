@@ -139,9 +139,9 @@ export default function AISummaryTab({ tenderId, basicSummary }) {
       id: 'eligibility',
       title: 'Eligibility Criteria',
       icon: Award,
-      iconColor: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200',
+      iconColor: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      borderColor: 'border-blue-200',
       items: bulletPoints.eligibilityCriteria || [],
     },
     {
@@ -426,9 +426,9 @@ export default function AISummaryTab({ tenderId, basicSummary }) {
             {(summary.actionItems || summary.recommendedActions || []).map((action, idx) => (
               <div
                 key={idx}
-                className="flex items-start gap-3 p-3 bg-white rounded-lg border border-green-100"
+                className="flex items-start gap-3 p-3 bg-white rounded-lg border border-blue-100"
               >
-                <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
                   {idx + 1}
                 </span>
                 <p className="text-sm text-slate-700">{action}</p>

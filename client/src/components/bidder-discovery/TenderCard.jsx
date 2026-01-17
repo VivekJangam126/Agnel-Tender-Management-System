@@ -28,13 +28,11 @@ export default function TenderCard({ tender, getUrgencyColor, getCompetitionLeve
   };
 
   return (
-    <div className={`bg-white rounded-xl border p-4 sm:p-6 hover:shadow-lg transition-all cursor-pointer group ${
-      isUploaded ? 'border-purple-200 ring-1 ring-purple-100' : 'border-slate-200'
-    }`}>
+    <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between h-full">
       {/* Uploaded Badge */}
       {isUploaded && (
         <div className="flex items-center gap-2 mb-3">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
             <Upload className="w-3 h-3" />
             Uploaded
           </span>
@@ -50,9 +48,7 @@ export default function TenderCard({ tender, getUrgencyColor, getCompetitionLeve
       {/* Header */}
       <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
         <div className="flex-1 min-w-0">
-          <h3 className={`text-lg sm:text-xl font-bold mb-2 transition-colors line-clamp-2 ${
-            isUploaded ? 'text-purple-900 group-hover:text-purple-600' : 'text-slate-900 group-hover:text-blue-600'
-          }`}>
+          <h3 className="text-lg sm:text-xl font-bold mb-2 text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2">
             {tender.title}
           </h3>
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600 mb-2 sm:mb-3">
@@ -132,21 +128,17 @@ export default function TenderCard({ tender, getUrgencyColor, getCompetitionLeve
           {tender.createdAt ? new Date(tender.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
         </span>
         {isUploaded && tender.uploadedBy && (
-          <span className="text-purple-600">
+          <span className="text-blue-600">
             by {tender.uploadedBy}
           </span>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-auto">
         <button
           onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
-          className={`flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base text-white rounded-lg font-semibold flex items-center justify-center gap-2 group-hover:shadow-md transition-all ${
-            isUploaded
-              ? 'bg-purple-600 hover:bg-purple-700'
-              : 'bg-blue-600 hover:bg-blue-700'
-          }`}
+          className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 group-hover:shadow-md transition-all"
         >
           <Eye className="w-4 h-4" />
           {isUploaded ? 'View Analysis' : 'View Details'}
@@ -170,11 +162,7 @@ export default function TenderCard({ tender, getUrgencyColor, getCompetitionLeve
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
-          className={`sm:flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg font-semibold flex items-center justify-center gap-2 ${
-            isUploaded
-              ? 'border-purple-300 text-purple-700 hover:bg-purple-50'
-              : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-          }`}
+          className="sm:flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-semibold flex items-center justify-center gap-2"
         >
           {isUploaded ? 'Edit Proposal' : 'Analyze'}
           <ChevronRight className="w-4 h-4" />

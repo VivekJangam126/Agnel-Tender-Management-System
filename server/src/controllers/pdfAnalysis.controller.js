@@ -8,6 +8,7 @@ import { MultiStepEvaluationService } from '../services/multiStepEvaluation.serv
 import { UploadedTenderService } from '../services/uploadedTender.service.js';
 import { SavedTenderService } from '../services/savedTender.service.js';
 import { ProposalPdfExportService } from '../services/proposalPdfExport.service.js';
+import { pool } from '../config/db.js';
 
 export const PDFAnalysisController = {
   /**
@@ -60,8 +61,18 @@ export const PDFAnalysisController = {
 
       // Auto-save to database for discovery
       let savedTender = null;
+      let isExistingTender = false;
       try {
         if (req.user && req.user.organizationId) {
+          // Check if tender already exists
+          const existingCheck = await pool.query(
+            `SELECT uploaded_tender_id FROM uploaded_tender 
+             WHERE user_id = $1 AND title = $2 LIMIT 1`,
+            [req.user.id, analysis.parsed.title || req.file.originalname.replace('.pdf', '')]
+          );
+          
+          isExistingTender = existingCheck.rows.length > 0;
+          
           savedTender = await UploadedTenderService.create(
             {
               title: analysis.parsed.title || req.file.originalname.replace('.pdf', ''),
@@ -76,16 +87,21 @@ export const PDFAnalysisController = {
               },
               metadata: analysis.parsed.metadata || {},
             },
-            req.user.userId,
+            req.user.id,
             req.user.organizationId
           );
-          console.log(`[PDF Analysis] Saved to database: ${savedTender.id}`);
+          
+          if (isExistingTender) {
+            console.log(`[PDF Analysis] Updated existing tender: ${savedTender.id}`);
+          } else {
+            console.log(`[PDF Analysis] Saved new tender to database: ${savedTender.id}`);
+          }
 
           // Auto-save to user's saved tenders list
           try {
             await SavedTenderService.saveTender(
               { uploadedTenderId: savedTender.id },
-              req.user.userId,
+              req.user.id,
               req.user.organizationId
             );
             console.log(`[PDF Analysis] Auto-saved to user's saved tenders`);
@@ -103,6 +119,10 @@ export const PDFAnalysisController = {
         // Include saved tender info if available
         savedTenderId: savedTender?.id || null,
         savedToDiscovery: !!savedTender,
+        isExistingTender,
+        message: isExistingTender 
+          ? 'Tender already exists - Updated with new analysis' 
+          : 'New tender saved successfully',
       };
 
       console.log('[PDF Analysis] Sending response - keys:', Object.keys(responseData));
