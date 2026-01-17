@@ -31,6 +31,7 @@ import AnalyzePage from "./pages/bidder/AnalyzePage";
 import SavedTendersPage from "./pages/bidder/SavedTendersPage";
 import BidderProfile from "./pages/bidder/BidderProfile";
 import PDFTenderAnalysis from "./pages/bidder/PDFTenderAnalysis";
+import UploadedTenderAnalysis from "./pages/bidder/UploadedTenderAnalysis";
 import TenderCreate from "./pages/admin/TenderCreate/TenderCreate";
 import Analytics from "./pages/admin/Analytics/Analytics";
 import Profile from "./pages/admin/Profile/Profile";
@@ -95,6 +96,7 @@ export default function App() {
             <Route path="/bidder/saved-tenders" element={<SavedTendersPage />} />
             <Route path="/bidder/profile" element={<BidderProfile />} />
             <Route path="/bidder/pdf-analyze" element={<PDFTenderAnalysis />} />
+            <Route path="/bidder/uploaded-tenders/:id/analyze" element={<UploadedTenderAnalysis />} />
           </Route>
 
           {/* Fallback */}

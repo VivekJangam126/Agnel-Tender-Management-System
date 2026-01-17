@@ -3,6 +3,9 @@
  * Handles PDF upload, analysis, and proposal evaluation
  */
 import { PDFAnalysisService } from '../services/pdfAnalysis.service.js';
+import { UploadedTenderService } from '../services/uploadedTender.service.js';
+import { SavedTenderService } from '../services/savedTender.service.js';
+import { ProposalPdfExportService } from '../services/proposalPdfExport.service.js';
 
 export const PDFAnalysisController = {
   /**
@@ -52,9 +55,54 @@ export const PDFAnalysisController = {
 
       console.log(`[PDF Analysis] Complete: ${analysis.parsed.sections.length} sections, ${analysis.parsed.stats.totalWords} words`);
 
+      // Auto-save to database for discovery
+      let savedTender = null;
+      try {
+        if (req.user && req.user.organizationId) {
+          savedTender = await UploadedTenderService.create(
+            {
+              title: analysis.parsed.title || req.file.originalname.replace('.pdf', ''),
+              description: analysis.summary?.executiveSummary?.substring(0, 500) || '',
+              source: 'PDF_UPLOAD',
+              originalFilename: req.file.originalname,
+              fileSize: req.file.size,
+              parsedData: analysis.parsed,
+              analysisData: {
+                summary: analysis.summary,
+                proposalDraft: analysis.proposalDraft,
+              },
+              metadata: analysis.parsed.metadata || {},
+            },
+            req.user.userId,
+            req.user.organizationId
+          );
+          console.log(`[PDF Analysis] Saved to database: ${savedTender.id}`);
+
+          // Auto-save to user's saved tenders list
+          try {
+            await SavedTenderService.saveTender(
+              { uploadedTenderId: savedTender.id },
+              req.user.userId,
+              req.user.organizationId
+            );
+            console.log(`[PDF Analysis] Auto-saved to user's saved tenders`);
+          } catch (autoSaveErr) {
+            console.error('[PDF Analysis] Failed to auto-save:', autoSaveErr.message);
+          }
+        }
+      } catch (saveErr) {
+        // Log but don't fail the request if save fails
+        console.error('[PDF Analysis] Failed to save to database:', saveErr.message);
+      }
+
       return res.json({
         success: true,
-        data: analysis,
+        data: {
+          ...analysis,
+          // Include saved tender info if available
+          savedTenderId: savedTender?.id || null,
+          savedToDiscovery: !!savedTender,
+        },
       });
     } catch (err) {
       console.error('[PDF Analysis] Error:', err);
@@ -176,6 +224,78 @@ Write the improved section content directly (no JSON, just the content).`;
       return res.status(500).json({
         success: false,
         error: err.message || 'Failed to regenerate section',
+      });
+    }
+  },
+
+  /**
+   * Export proposal as professional PDF
+   * POST /api/pdf/export
+   */
+  async exportProposalPDF(req, res) {
+    try {
+      const { proposalSections, tenderInfo, companyInfo, template } = req.body;
+
+      if (!proposalSections || !Array.isArray(proposalSections) || proposalSections.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Proposal sections are required for export.',
+        });
+      }
+
+      console.log(`[PDF Export] Generating PDF with ${proposalSections.length} sections, template: ${template || 'government'}`);
+
+      // Get user/company info from request if not provided
+      const finalCompanyInfo = companyInfo || {
+        name: req.user?.organizationName || '[BIDDER NAME]',
+        email: req.user?.email || '[EMAIL]',
+      };
+
+      const finalTenderInfo = tenderInfo || {
+        title: 'Tender Proposal',
+      };
+
+      // Generate the PDF
+      const pdfBuffer = await ProposalPdfExportService.generateProposalPDF(
+        { sections: proposalSections },
+        finalTenderInfo,
+        finalCompanyInfo,
+        template || 'government'
+      );
+
+      // Set response headers for PDF download
+      const filename = `Proposal_${(finalTenderInfo.title || 'Tender').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}_${Date.now()}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+
+      return res.send(pdfBuffer);
+    } catch (err) {
+      console.error('[PDF Export] Error:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to generate PDF export',
+      });
+    }
+  },
+
+  /**
+   * Get available export templates
+   * GET /api/pdf/templates
+   */
+  async getExportTemplates(req, res) {
+    try {
+      const templates = ProposalPdfExportService.getTemplates();
+      return res.json({
+        success: true,
+        data: templates,
+      });
+    } catch (err) {
+      console.error('[PDF Templates] Error:', err);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve templates',
       });
     }
   },

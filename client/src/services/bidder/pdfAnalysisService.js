@@ -61,6 +61,111 @@ export const pdfAnalysisService = {
     });
     return response.data;
   },
+
+  /**
+   * Export proposal as professional PDF
+   * @param {Object} params - Export parameters
+   * @returns {Promise<Blob>} PDF blob for download
+   */
+  async exportProposalPDF({ proposalSections, tenderInfo, companyInfo, template }) {
+    const response = await api.post('/pdf/export', {
+      proposalSections,
+      tenderInfo,
+      companyInfo,
+      template,
+    }, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
+   * Get available export templates
+   * @returns {Promise<Object>} Templates list
+   */
+  async getExportTemplates() {
+    const response = await api.get('/pdf/templates');
+    return response.data;
+  },
+
+  // ==========================================
+  // UPLOADED PROPOSAL DRAFTS
+  // ==========================================
+
+  /**
+   * Save or update a proposal draft for an uploaded tender
+   * @param {Object} params - { uploadedTenderId, sections, title? }
+   * @returns {Promise<Object>} Saved draft
+   */
+  async saveProposalDraft({ uploadedTenderId, sections, title }) {
+    const response = await api.post('/bidder/uploaded-proposal-drafts', {
+      uploadedTenderId,
+      sections,
+      title,
+    });
+    return response.data;
+  },
+
+  /**
+   * Get all proposal drafts for uploaded tenders
+   * @param {Object} params - Query params
+   * @returns {Promise<Object>} List of drafts
+   */
+  async getProposalDrafts(params = {}) {
+    const response = await api.get('/bidder/uploaded-proposal-drafts', { params });
+    return response.data;
+  },
+
+  /**
+   * Get proposal draft by ID
+   * @param {string} draftId - Draft ID
+   * @returns {Promise<Object>} Draft data
+   */
+  async getProposalDraftById(draftId) {
+    const response = await api.get(`/bidder/uploaded-proposal-drafts/${draftId}`);
+    return response.data;
+  },
+
+  /**
+   * Get proposal draft by uploaded tender ID
+   * @param {string} uploadedTenderId - Uploaded tender ID
+   * @returns {Promise<Object>} Draft data
+   */
+  async getProposalDraftByTenderId(uploadedTenderId) {
+    const response = await api.get(`/bidder/uploaded-proposal-drafts/tender/${uploadedTenderId}`);
+    return response.data;
+  },
+
+  /**
+   * Update draft status
+   * @param {string} draftId - Draft ID
+   * @param {string} status - New status
+   * @returns {Promise<Object>} Updated draft
+   */
+  async updateDraftStatus(draftId, status) {
+    const response = await api.put(`/bidder/uploaded-proposal-drafts/${draftId}/status`, { status });
+    return response.data;
+  },
+
+  /**
+   * Record an export of the draft
+   * @param {string} draftId - Draft ID
+   * @returns {Promise<Object>} Updated draft
+   */
+  async recordDraftExport(draftId) {
+    const response = await api.post(`/bidder/uploaded-proposal-drafts/${draftId}/export`);
+    return response.data;
+  },
+
+  /**
+   * Delete a proposal draft
+   * @param {string} draftId - Draft ID
+   * @returns {Promise<Object>} Success response
+   */
+  async deleteProposalDraft(draftId) {
+    const response = await api.delete(`/bidder/uploaded-proposal-drafts/${draftId}`);
+    return response.data;
+  },
 };
 
 export default pdfAnalysisService;

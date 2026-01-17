@@ -24,6 +24,10 @@ import {
   Loader2,
   Check,
   X,
+  FileDown,
+  Building2,
+  Landmark,
+  Minimize2,
 } from 'lucide-react';
 import BidderLayout from '../../components/bidder-layout/BidderLayout';
 import { pdfAnalysisService } from '../../services/bidder/pdfAnalysisService';
@@ -92,6 +96,31 @@ export default function PDFTenderAnalysis() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadStage, setUploadStage] = useState('idle'); // idle, uploading, parsing, analyzing, complete
 
+  // Saved to discovery state
+  const [savedTenderId, setSavedTenderId] = useState(null);
+  const [showSavedNotification, setShowSavedNotification] = useState(false);
+
+  // Export state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('government');
+  const [exporting, setExporting] = useState(false);
+
+  // Proposal draft save state
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [savedDraftId, setSavedDraftId] = useState(null);
+
+  const [companyInfo, setCompanyInfo] = useState({
+    name: '',
+    registrationNumber: '',
+    address: '',
+    contactPerson: '',
+    email: '',
+    phone: '',
+    gstNumber: '',
+    panNumber: '',
+  });
+
   // Handle file from navigation state or new upload
   useEffect(() => {
     if (location.state?.file) {
@@ -142,6 +171,14 @@ export default function PDFTenderAnalysis() {
         setProposalSections(result.data.proposalDraft?.sections || []);
         setUploadStage('complete');
         setActiveTab('summary');
+
+        // Track if saved to discovery
+        if (result.data.savedToDiscovery && result.data.savedTenderId) {
+          setSavedTenderId(result.data.savedTenderId);
+          setShowSavedNotification(true);
+          // Auto-hide notification after 5 seconds
+          setTimeout(() => setShowSavedNotification(false), 5000);
+        }
       } else {
         throw new Error(result.error || 'Analysis failed');
       }
@@ -225,6 +262,89 @@ export default function PDFTenderAnalysis() {
     navigator.clipboard.writeText(text);
   };
 
+  const handleSaveProposalDraft = async () => {
+    if (!savedTenderId || proposalSections.length === 0) {
+      setError('No tender or proposal sections to save');
+      return;
+    }
+
+    setSavingDraft(true);
+    setError(null);
+
+    try {
+      const result = await pdfAnalysisService.saveProposalDraft({
+        uploadedTenderId: savedTenderId,
+        sections: proposalSections,
+        title: analysis?.parsed?.title || 'Untitled Proposal',
+      });
+
+      if (result.success) {
+        setDraftSaved(true);
+        setSavedDraftId(result.data.id);
+        // Show success briefly
+        setTimeout(() => setDraftSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error('Save draft error:', err);
+      setError(err.response?.data?.error || 'Failed to save proposal draft');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!proposalSections || proposalSections.length === 0) {
+      setError('No proposal sections to export');
+      return;
+    }
+
+    setExporting(true);
+    setError(null);
+
+    try {
+      const tenderInfo = {
+        title: analysis?.parsed?.title || 'Tender Proposal',
+        referenceNumber: analysis?.parsed?.metadata?.referenceNumber || '',
+        authority: analysis?.parsed?.metadata?.authority || '',
+        organizationName: analysis?.parsed?.metadata?.organizationName || '',
+        deadline: analysis?.parsed?.metadata?.deadline || '',
+        estimatedValue: analysis?.parsed?.metadata?.estimatedValue || '',
+        executiveSummary: analysis?.summary?.executiveSummary || '',
+        keyHighlights: analysis?.summary?.actionItems || [],
+      };
+
+      const blob = await pdfAnalysisService.exportProposalPDF({
+        proposalSections,
+        tenderInfo,
+        companyInfo: companyInfo.name ? companyInfo : null,
+        template: selectedTemplate,
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Proposal_${(tenderInfo.title || 'Tender').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30)}_${Date.now()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setShowExportModal(false);
+    } catch (err) {
+      console.error('Export error:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to export PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const templates = [
+    { id: 'government', name: 'Government Standard', icon: Landmark, description: 'Full formal structure with compliance declaration, affidavit & seal area' },
+    { id: 'corporate', name: 'Corporate Professional', icon: Building2, description: 'Modern business style with value proposition & why choose us sections' },
+    { id: 'minimal', name: 'Minimal Clean', icon: Minimize2, description: 'No cover page - straight to content, compact & efficient' },
+  ];
+
   // Upload UI
   if (!analysis) {
     return (
@@ -241,6 +361,7 @@ export default function PDFTenderAnalysis() {
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
               <div className="text-center mb-8">
+              
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-blue-600" />
                 </div>
@@ -373,11 +494,19 @@ export default function PDFTenderAnalysis() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <div className="text-center">
                   <p className="text-xs text-slate-500 mb-1">Opportunity Score</p>
                   <ScoreBadge score={analysis.summary?.opportunityScore || 70} size="sm" />
                 </div>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  disabled={proposalSections.length === 0}
+                  className="px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Export PDF
+                </button>
               </div>
             </div>
 
@@ -407,6 +536,39 @@ export default function PDFTenderAnalysis() {
             </div>
           </div>
         </div>
+
+        {/* Saved to Discovery Notification */}
+        {showSavedNotification && savedTenderId && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
+            <div className="max-w-7xl mx-auto px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-green-800 font-medium">Saved to Discovery</p>
+                    <p className="text-green-700 text-sm">This tender is now available in your Discover Tenders page</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate('/bidder/tenders')}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    View in Discovery
+                  </button>
+                  <button
+                    onClick={() => setShowSavedNotification(false)}
+                    className="p-1.5 hover:bg-green-100 rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4 text-green-600" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -572,18 +734,40 @@ export default function PDFTenderAnalysis() {
                     Edit each section to customize your proposal. Use AI to regenerate sections.
                   </p>
                 </div>
-                <button
-                  onClick={handleEvaluate}
-                  disabled={evaluating}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 text-white font-medium rounded-lg flex items-center gap-2"
-                >
-                  {evaluating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <BarChart3 className="w-4 h-4" />
+                <div className="flex items-center gap-3">
+                  {savedTenderId && (
+                    <button
+                      onClick={handleSaveProposalDraft}
+                      disabled={savingDraft}
+                      className={`px-4 py-2 font-medium rounded-lg flex items-center gap-2 transition-all ${
+                        draftSaved
+                          ? 'bg-green-100 text-green-700 border border-green-300'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {savingDraft ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : draftSaved ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <FileCheck className="w-4 h-4" />
+                      )}
+                      {draftSaved ? 'Saved!' : 'Save Draft'}
+                    </button>
                   )}
-                  Evaluate Proposal
-                </button>
+                  <button
+                    onClick={handleEvaluate}
+                    disabled={evaluating}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 text-white font-medium rounded-lg flex items-center gap-2"
+                  >
+                    {evaluating ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <BarChart3 className="w-4 h-4" />
+                    )}
+                    Evaluate Proposal
+                  </button>
+                </div>
               </div>
 
               {proposalSections.map((section) => (
@@ -814,6 +998,175 @@ export default function PDFTenderAnalysis() {
           )}
         </div>
       </div>
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Export Proposal PDF</h2>
+                  <p className="text-slate-600 text-sm mt-1">Generate a professional tender proposal document</p>
+                </div>
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Template Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-900 mb-3">Select Template</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {templates.map((template) => {
+                    const Icon = template.icon;
+                    return (
+                      <button
+                        key={template.id}
+                        onClick={() => setSelectedTemplate(template.id)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          selectedTemplate === template.id
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Icon className={`w-6 h-6 mb-2 ${selectedTemplate === template.id ? 'text-green-600' : 'text-slate-500'}`} />
+                        <h4 className="font-semibold text-slate-900 text-sm">{template.name}</h4>
+                        <p className="text-xs text-slate-500 mt-1">{template.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Company Information (Optional) */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-semibold text-slate-900">Company Information (Optional)</label>
+                  <span className="text-xs text-slate-500">Fill in to personalize the proposal</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Company Name"
+                    value={companyInfo.name}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, name: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Registration Number"
+                    value={companyInfo.registrationNumber}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, registrationNumber: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Contact Person"
+                    value={companyInfo.contactPerson}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, contactPerson: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={companyInfo.email}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, email: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Phone"
+                    value={companyInfo.phone}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, phone: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="GST Number"
+                    value={companyInfo.gstNumber}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, gstNumber: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="PAN Number"
+                    value={companyInfo.panNumber}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, panNumber: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <textarea
+                    placeholder="Company Address"
+                    value={companyInfo.address}
+                    onChange={(e) => setCompanyInfo({ ...companyInfo, address: e.target.value })}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                    rows={2}
+                  />
+                </div>
+              </div>
+
+              {/* Export Summary */}
+              <div className="bg-slate-50 rounded-xl p-4">
+                <h4 className="font-semibold text-slate-900 mb-2">Export Summary</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-slate-500">Sections:</span>
+                    <span className="ml-2 font-medium text-slate-900">{proposalSections.length}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Template:</span>
+                    <span className="ml-2 font-medium text-slate-900">{templates.find(t => t.id === selectedTemplate)?.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Total Words:</span>
+                    <span className="ml-2 font-medium text-slate-900">
+                      {proposalSections.reduce((acc, s) => acc + (s.wordCount || 0), 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Format:</span>
+                    <span className="ml-2 font-medium text-slate-900">PDF (A4)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-5 py-2.5 border border-slate-300 rounded-lg font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={exporting}
+                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 text-white font-medium rounded-lg flex items-center gap-2 transition-colors"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Export PDF
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </BidderLayout>
   );
 }
