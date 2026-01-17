@@ -28,7 +28,7 @@ export const pdfAnalysisService = {
       };
     }
 
-    const response = await api.post('/pdf/analyze', formData, config);
+    const response = await api.post('/api/pdf/analyze', formData, config);
     return response.data;
   },
 

@@ -113,7 +113,7 @@ export const insightsService = {
     const params = new URLSearchParams({ limit });
     if (categories) params.append('categories', categories.join(','));
 
-    const response = await api.get(`/insights/news?${params}`);
+    const response = await api.get(`/api/insights/news?${params}`);
     return response.data;
   },
 
@@ -123,7 +123,7 @@ export const insightsService = {
    * @returns {Promise<Object>} News highlights
    */
   async getNewsHighlights(limit = 5) {
-    const response = await api.get(`/insights/news/highlights?limit=${limit}`);
+    const response = await api.get(`/api/insights/news/highlights?limit=${limit}`);
     return response.data;
   },
 
@@ -132,7 +132,7 @@ export const insightsService = {
    * @returns {Promise<Array>} Feed sources
    */
   async getNewsSources() {
-    const response = await api.get('/insights/news/sources');
+    const response = await api.get('/api/insights/news/sources');
     return response.data;
   },
 
@@ -145,7 +145,7 @@ export const insightsService = {
    * @returns {Promise<Object>} All dashboard insights in one call
    */
   async getDashboardInsights() {
-    const response = await api.get('/insights/dashboard');
+    const response = await api.get('/api/insights/dashboard');
     return response.data;
   }
 };
