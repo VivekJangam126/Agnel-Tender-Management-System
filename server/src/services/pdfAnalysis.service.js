@@ -158,26 +158,28 @@ export const PDFAnalysisService = {
     // STAGE 1: GROQ RAG FACT EXTRACTION
     // Output: Strict JSON only (internal use)
     // ============================================
-    const groqSystemPrompt = `You are a fact extraction engine for government tender documents.
+    const groqSystemPrompt = `You are a comprehensive fact extraction engine for government tender documents.
 
-YOUR ONLY TASK: Extract factual information from the provided tender content and output STRICT JSON.
+  YOUR TASK: Extract detailed factual information from the provided tender content and output STRICT JSON.
 
-CRITICAL RULES:
-- Output ONLY valid JSON - no prose, no explanations, no formatting
-- Extract ONLY facts present in the provided content
-- Use EXACT values from the document (amounts, dates, percentages)
-- If information is NOT in the document, use null or empty array
-- Do NOT infer, assume, or hallucinate any information
-- Do NOT add context or explanations - just raw data extraction`;
+  CRITICAL RULES:
+  - Output ONLY valid JSON - no prose, no explanations, no formatting
+  - Extract comprehensive, detailed facts present in the provided content
+  - Use EXACT values from the document (amounts, dates, percentages)
+  - For executive summary: Create a comprehensive 5-7 paragraph summary covering all key aspects
+  - For each category: Extract ALL relevant points, not just 2-3 items
+  - If information is NOT in the document, use null or empty array
+  - Do NOT infer, assume, or hallucinate any information
+  - Be thorough and comprehensive in extraction`;
 
     // Prepare content with token limit in mind
     const contentForAnalysis = this._prepareContentForAnalysis(parsed);
 
     // Check token budget
-    const budget = TokenCounter.getBudget(GROQ_MODEL, 3000);
+    const budget = TokenCounter.getBudget(GROQ_MODEL, 4000);
     console.log(`[PDF Summary] Stage 1 (Groq) - Token budget: ${budget.prompt}`);
 
-    const groqUserPrompt = `EXTRACT FACTS FROM THIS TENDER DOCUMENT:
+    const groqUserPrompt = `EXTRACT COMPREHENSIVE FACTS FROM THIS TENDER DOCUMENT:
 
 TENDER METADATA:
 - Title: ${parsed.title || null}
@@ -193,23 +195,23 @@ ${contentForAnalysis}
 
 OUTPUT STRICT JSON (no other text):
 {
-  "executiveSummary": "raw extracted summary text or null",
-  "criticalRequirements": ["extracted requirement 1", "extracted requirement 2"],
-  "eligibilityCriteria": ["extracted criterion 1", "extracted criterion 2"],
-  "technicalSpecifications": ["extracted spec 1", "extracted spec 2"],
-  "financialTerms": ["extracted EMD info", "extracted payment terms"],
-  "complianceRequirements": ["extracted compliance 1"],
-  "deadlinesAndTimelines": ["extracted deadline 1", "extracted milestone 1"],
-  "documentsRequired": ["extracted document 1", "extracted document 2"],
-  "riskFactors": ["extracted risk 1", "extracted penalty 1"],
+  "executiveSummary": "A comprehensive 5-7 paragraph summary that covers: (1) Project overview and objectives, (2) Scope of work and deliverables, (3) Key technical requirements, (4) Financial terms and conditions, (5) Eligibility criteria, (6) Timeline and milestones, (7) Critical submission requirements. Make it detailed and informative for proposal drafting.",
+  "criticalRequirements": ["Extract ALL critical requirements with complete details", "Include specific technical specs", "Add compliance mandates", "List quality standards"],
+  "eligibilityCriteria": ["Extract ALL eligibility criteria with exact details", "Include experience requirements", "Financial turnover requirements", "Technical capability requirements", "Past performance requirements"],
+  "technicalSpecifications": ["Extract ALL technical specifications in detail", "Include performance standards", "Quality requirements", "Testing criteria", "Compliance standards"],
+  "financialTerms": ["Complete EMD details with amounts and format", "Payment milestone breakdown", "Retention money details", "Bank guarantee requirements", "Price variation clauses", "Tax implications"],
+  "complianceRequirements": ["All statutory compliance requirements", "Certifications needed", "Registration requirements", "Standards to follow", "Documentation mandates"],
+  "deadlinesAndTimelines": ["Submission deadline with date and time", "Pre-bid meeting details", "Query submission deadline", "Project execution timeline", "Milestone deadlines", "Penalty clauses for delays"],
+  "documentsRequired": ["Complete list of ALL documents needed", "Formats and specifications", "Attestation requirements", "Number of copies", "Submission format"],
+  "riskFactors": ["Identify all potential risks", "Penalty clauses", "Liquidated damages", "Performance bonds", "Warranty requirements", "Arbitration clauses"],
   "opportunityScore": 70,
-  "opportunityAssessment": "raw assessment or null",
-  "actionItems": ["recommended action 1", "recommended action 2"]
+  "opportunityAssessment": "Detailed assessment of this opportunity: viability, competition level, complexity, profit potential, and strategic fit. Be comprehensive (3-4 paragraphs).",
+  "actionItems": ["List ALL recommended actions for proposal preparation", "Documentation to prepare", "Calculations needed", "Approvals to obtain", "Partner/subcontractor coordination"]
 }`;
 
     const groqResponse = await callGroq(groqSystemPrompt, groqUserPrompt, {
-      temperature: 0, // Zero temperature for deterministic extraction
-      maxTokens: 3000,
+      temperature: 0.1, // Low temperature for comprehensive extraction
+      maxTokens: 4000, // Increased for detailed output
     });
 
     const groqJson = parseJSON(groqResponse);

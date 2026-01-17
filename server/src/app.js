@@ -36,6 +36,7 @@ import evaluationRoutes from './routes/evaluation.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import bidderRoutes from './routes/bidder.routes.js';
 import pdfAnalysisRoutes from './routes/pdfAnalysis.routes.js';
+import uploadedTenderRoutes from './routes/uploadedTender.routes.js';
 import collaborationRoutes from './routes/collaboration.routes.js';
 import insightsRoutes from './routes/insights.routes.js';
 
@@ -75,6 +76,7 @@ app.use('/api/bidder', bidderRoutes);
 app.use('/api/evaluation', evaluationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/pdf', pdfAnalysisRoutes);
+app.use('/api/uploaded-tender', uploadedTenderRoutes);
 app.use('/api/collaboration', collaborationRoutes);
 app.use('/api/insights', insightsRoutes);
 

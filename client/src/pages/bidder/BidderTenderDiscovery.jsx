@@ -344,8 +344,22 @@ export default function BidderTenderDiscovery() {
           {/* Header with Upload Button */}
           <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">Discover Tenders</h1>
-              <p className="text-sm sm:text-base text-slate-600">Find and analyze opportunities matching your expertise</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
+                Discover Tenders
+                {statistics && (
+                  <span className="ml-3 text-xl text-slate-600 font-normal">
+                    ({statistics.totalTenders || tenders.length} Available)
+                  </span>
+                )}
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600">
+                Find and analyze opportunities matching your expertise
+                {statistics?.uploadedTenders > 0 && (
+                  <span className="ml-1 text-blue-600 font-medium">
+                    • {statistics.uploadedTenders} uploaded by you
+                  </span>
+                )}
+              </p>
             </div>
             
             {/* Upload Button - Top Right */}
@@ -435,7 +449,7 @@ export default function BidderTenderDiscovery() {
               Showing <span className="font-semibold text-slate-900">{tenders.length}</span> tenders
               {statistics?.uploadedTenders > 0 && (
                 <span className="ml-1">
-                  (<span className="text-purple-600 font-medium">{statistics.uploadedTenders} uploaded</span>)
+                  (<span className="text-blue-600 font-medium">{statistics.uploadedTenders} uploaded</span>)
                 </span>
               )}
             </p>
