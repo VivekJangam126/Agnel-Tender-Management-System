@@ -1,7 +1,7 @@
 import { apiRequest } from './apiClient';
 
 export const authService = {
-	login: (email, password) => apiRequest('/auth/login', { method: 'POST', body: { email, password } }),
-	signup: (payload) => apiRequest('/auth/signup', { method: 'POST', body: payload }),
-	me: (token) => apiRequest('/auth/me', { method: 'GET', token }),
+	login: (email, password) => apiRequest('/api/auth/login', { method: 'POST', body: { email, password } }),
+	signup: (payload) => apiRequest('/api/auth/signup', { method: 'POST', body: payload }),
+	me: (token) => apiRequest('/api/auth/me', { method: 'GET', token }),
 };
