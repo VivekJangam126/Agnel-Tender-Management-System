@@ -366,10 +366,10 @@ export const CollaborationService = {
   async isUploadedTenderOwner(userId, uploadedTenderId) {
     const result = await pool.query(
       `SELECT 1
-       FROM uploaded_tender ut
-       JOIN "user" u ON ut.organization_id = u.organization_id
-       WHERE ut.id = $1 AND u.user_id = $2`,
-      [uploadedTenderId, userId]
+      FROM uploaded_tender ut
+      JOIN "user" u ON ut.organization_id = u.organization_id
+      WHERE ut.uploaded_tender_id = $1 AND u.user_id = $2`,
+          [uploadedTenderId, userId]
     );
 
     return result.rows.length > 0;
@@ -383,9 +383,9 @@ export const CollaborationService = {
       `SELECT ut.*,
               (ut.organization_id = u.organization_id) as is_owner
        FROM uploaded_tender ut
-       JOIN "user" u ON u.user_id = $2
-       WHERE ut.id = $1`,
-      [uploadedTenderId, userId]
+      JOIN "user" u ON u.user_id = $2
+      WHERE ut.uploaded_tender_id = $1`,
+          [uploadedTenderId, userId]
     );
 
     return result.rows[0] || null;
