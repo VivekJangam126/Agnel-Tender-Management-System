@@ -111,6 +111,7 @@ export default function UploadedTenderAnalysis() {
           parsed: tenderData.parsedData,
           summary: tenderData.analysisData?.summary,
           proposalDraft: tenderData.analysisData?.proposalDraft,
+          analysisId: tenderData.analysisData?.analysisId || tenderData.analysisData?.analysis_id,
         };
         setAnalysis(analysisData);
         setProposalSections(tenderData.analysisData?.proposalDraft?.sections || []);
@@ -133,8 +134,9 @@ export default function UploadedTenderAnalysis() {
 
     try {
       const result = await pdfAnalysisService.evaluateProposal(
+        analysis?.analysisId,
         { sections: proposalSections },
-        analysis
+        tender?.uploaded_tender_id || tender?.id || null
       );
 
       if (result.success) {

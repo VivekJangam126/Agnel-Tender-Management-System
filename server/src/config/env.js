@@ -74,6 +74,8 @@ export const env = (() => {
     CORS_ALLOW_CREDENTIALS: process.env.CORS_ALLOW_CREDENTIALS || 'false',
     RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS || '60000',
     RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX || '30',
+    // MVP Mode: Auto-generate dummy bidders and proposals
+    MVP_MODE: process.env.MVP_MODE || 'false',
   };
 })();
 

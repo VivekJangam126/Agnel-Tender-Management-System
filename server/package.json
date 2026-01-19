@@ -6,7 +6,10 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "seed:dummy-bidders": "node src/scripts/seedDummyBidders.js",
+    "validate:mvp": "node src/scripts/validateMVP.js",
+    "test:mvp-integration": "node src/scripts/testMVPIntegration.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

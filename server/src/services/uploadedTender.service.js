@@ -5,6 +5,12 @@
 import { pool } from '../config/db.js';
 
 export const UploadedTenderService = {
+  // Safely convert any date-ish value to a JS Date or null to prevent invalid timestamps
+  _safeDate(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  },
   /**
    * Create a new uploaded tender record
    * @param {Object} data - Tender data from PDF analysis
@@ -53,7 +59,7 @@ export const UploadedTenderService = {
     const referenceNumber = metadata.referenceNumber || parsedData?.metadata?.referenceNumber || null;
     const sector = metadata.sector || parsedData?.metadata?.sector || null;
     const estimatedValue = metadata.estimatedValue || parsedData?.metadata?.estimatedValue || null;
-    const submissionDeadline = metadata.deadline || parsedData?.metadata?.deadline || null;
+    const submissionDeadlineRaw = metadata.deadline || parsedData?.metadata?.deadline || null;
     const emdAmount = metadata.emdAmount || parsedData?.metadata?.emdAmount || null;
     const wordCount = parsedData?.stats?.totalWords || 0;
     const sectionCount = parsedData?.sections?.length || 0;
@@ -101,7 +107,7 @@ export const UploadedTenderService = {
       referenceNumber,
       sector,
       estimatedValue,
-      submissionDeadline ? new Date(submissionDeadline) : null,
+      this._safeDate(submissionDeadlineRaw),
       emdAmount,
       wordCount,
       sectionCount,
@@ -326,7 +332,7 @@ export const UploadedTenderService = {
       const referenceNumber = metadata.referenceNumber || parsedData?.metadata?.referenceNumber || null;
       const sector = metadata.sector || parsedData?.metadata?.sector || null;
       const estimatedValue = metadata.estimatedValue || parsedData?.metadata?.estimatedValue || null;
-      const submissionDeadline = metadata.deadline || parsedData?.metadata?.deadline || null;
+      const submissionDeadlineRaw = metadata.deadline || parsedData?.metadata?.deadline || null;
       const emdAmount = metadata.emdAmount || parsedData?.metadata?.emdAmount || null;
       const wordCount = parsedData?.stats?.totalWords || 0;
       const sectionCount = parsedData?.sections?.length || 0;
@@ -363,7 +369,7 @@ export const UploadedTenderService = {
         referenceNumber,
         sector,
         estimatedValue,
-        submissionDeadline ? new Date(submissionDeadline) : null,
+          this._safeDate(submissionDeadlineRaw),
         emdAmount,
         wordCount,
         sectionCount,
@@ -478,6 +484,9 @@ export const UploadedTenderService = {
       record.analysisData = typeof row.analysis_data === 'string'
         ? JSON.parse(row.analysis_data)
         : row.analysis_data;
+      
+      // Extract normalizedSections from analysisData for easy access
+      record.normalizedSections = record.analysisData?.normalizedSections || [];
     }
 
     return record;

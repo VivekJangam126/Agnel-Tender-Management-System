@@ -145,24 +145,37 @@ export const ProposalPdfExportService = {
     doc.addPage();
     this._renderTableOfContents(doc, config, proposalData.sections, pageWidth, true);
 
-    // Executive Summary
-    if (tenderInfo.executiveSummary) {
+    // Executive Summary (only if exists and has substantial content)
+    if (tenderInfo.executiveSummary && tenderInfo.executiveSummary.trim().length > 50) {
       doc.addPage();
       this._renderExecutiveSummary(doc, config, tenderInfo, pageWidth);
     }
 
-    // Company Profile with full details
-    doc.addPage();
-    this._renderGovernmentCompanyProfile(doc, config, companyInfo, pageWidth);
-
-    // Proposal Sections
-    proposalData.sections.forEach((section, index) => {
+    // Company Profile with full details (only if company info provided)
+    if (companyInfo && companyInfo.name && companyInfo.name !== '[BIDDER NAME]') {
       doc.addPage();
+      this._renderGovernmentCompanyProfile(doc, config, companyInfo, pageWidth);
+    }
+
+    // Proposal Sections - smart page breaks
+    proposalData.sections.forEach((section, index) => {
+      // Only add new page if not first section and there's not enough space
+      if (index > 0 || companyInfo?.name) {
+        if (doc.y > doc.page.height - 150) {
+          doc.addPage();
+        } else if (index > 0) {
+          doc.moveDown(2);
+        }
+      }
       this._renderProposalSection(doc, config, section, index + 1, pageWidth, true);
     });
 
-    // Compliance Declaration (Government only)
-    doc.addPage();
+    // Compliance Declaration (Government only) - only add if there's not enough space
+    if (doc.y > doc.page.height - 300) {
+      doc.addPage();
+    } else {
+      doc.moveDown(3);
+    }
     this._renderComplianceDeclaration(doc, config, tenderInfo, companyInfo, pageWidth);
 
     // Affidavit Page (Government only)
@@ -177,23 +190,42 @@ export const ProposalPdfExportService = {
     // Modern Cover Page
     this._renderCorporateCoverPage(doc, config, tenderInfo, companyInfo, pageWidth);
 
-    // Value Proposition (Corporate only)
-    doc.addPage();
-    this._renderValueProposition(doc, config, tenderInfo, companyInfo, pageWidth);
-
-    // Brief Company Overview (not full profile)
-    doc.addPage();
-    this._renderCorporateCompanyOverview(doc, config, companyInfo, pageWidth);
-
-    // Proposal Sections with modern styling
-    proposalData.sections.forEach((section, index) => {
+    // Value Proposition (Corporate only) - only if company info exists
+    if (companyInfo && companyInfo.name && companyInfo.name !== '[BIDDER NAME]') {
       doc.addPage();
+      this._renderValueProposition(doc, config, tenderInfo, companyInfo, pageWidth);
+      
+      // Brief Company Overview (not full profile)
+      if (doc.y > doc.page.height - 200) {
+        doc.addPage();
+      } else {
+        doc.moveDown(2);
+      }
+      this._renderCorporateCompanyOverview(doc, config, companyInfo, pageWidth);
+    }
+
+    // Proposal Sections with modern styling - smart page breaks
+    proposalData.sections.forEach((section, index) => {
+      // Check if we need a new page
+      if (index === 0 && (!companyInfo || !companyInfo.name)) {
+        doc.addPage();
+      } else if (doc.y > doc.page.height - 150) {
+        doc.addPage();
+      } else if (index > 0) {
+        doc.moveDown(2);
+      }
       this._renderProposalSection(doc, config, section, index + 1, pageWidth, false);
     });
 
-    // Why Choose Us (Corporate only)
-    doc.addPage();
-    this._renderWhyChooseUs(doc, config, companyInfo, pageWidth);
+    // Why Choose Us (Corporate only) - only if there's not enough space
+    if (companyInfo && companyInfo.name && companyInfo.name !== '[BIDDER NAME]') {
+      if (doc.y > doc.page.height - 250) {
+        doc.addPage();
+      } else {
+        doc.moveDown(3);
+      }
+      this._renderWhyChooseUs(doc, config, companyInfo, pageWidth);
+    }
   },
 
   /**
@@ -631,6 +663,9 @@ export const ProposalPdfExportService = {
    * Proposal Section
    */
   _renderProposalSection(doc, config, section, sectionNumber, pageWidth, formal = true) {
+    // Check if section has actual content
+    const hasContent = section.content && section.content.trim().length > 0;
+    
     if (formal) {
       this._renderSectionHeader(doc, config, `SECTION ${sectionNumber}: ${section.title.toUpperCase()}`, pageWidth);
     } else {
@@ -642,34 +677,46 @@ export const ProposalPdfExportService = {
       doc.rect(config.margins.left, doc.y, 40, 2).fill(config.colors.accent);
     }
 
-    doc.moveDown(1);
+    doc.moveDown(0.8); // Reduced from 1
 
-    const content = section.content || '[No content provided]';
-    const paragraphs = content.split('\n\n');
+    if (!hasContent) {
+      doc.fontSize(10).font('Helvetica-Oblique').fillColor('#999999')
+         .text('[No content provided for this section]');
+      doc.moveDown(1);
+      return;
+    }
 
-    paragraphs.forEach((para) => {
+    const content = section.content;
+    const paragraphs = content.split('\n\n').filter(p => p.trim().length > 0); // Filter empty paragraphs
+
+    paragraphs.forEach((para, paraIndex) => {
       if (para.trim().startsWith('#')) {
         doc.fontSize(11).font('Helvetica-Bold').fillColor(config.colors.primary)
            .text(para.replace(/^#+\s*/, ''));
-        doc.moveDown(0.5);
+        doc.moveDown(0.4); // Reduced from 0.5
       } else if (para.trim().startsWith('-') || para.trim().startsWith('•')) {
-        para.split('\n').forEach((line) => {
+        para.split('\n').filter(line => line.trim().length > 0).forEach((line) => {
           const text = line.replace(/^[-•]\s*/, '');
           if (text.trim()) {
             doc.fontSize(10).font('Helvetica')
                .fillColor(config.colors.accent).text('  •  ', { continued: true })
                .fillColor(config.colors.secondary).text(text);
-            doc.moveDown(0.3);
+            doc.moveDown(0.2); // Reduced from 0.3
           }
         });
+        doc.moveDown(0.3); // Add small space after bullet list
       } else {
         doc.fontSize(10).font('Helvetica').fillColor(config.colors.secondary)
-           .text(para.trim(), { align: 'justify', lineGap: 3 });
-        doc.moveDown(0.8);
+           .text(para.trim(), { align: 'justify', lineGap: 2 }); // Reduced lineGap from 3
+        doc.moveDown(0.6); // Reduced from 0.8
       }
 
-      if (doc.y > doc.page.height - 100) doc.addPage();
+      // Only add page break if really needed
+      if (doc.y > doc.page.height - 120) doc.addPage();
     });
+    
+    // Reduced spacing after section
+    doc.moveDown(0.5);
   },
 
   /**
@@ -681,16 +728,21 @@ export const ProposalPdfExportService = {
        .fillColor(config.colors.primary)
        .text(`${sectionNumber}. ${section.title}`);
 
-    doc.moveDown(0.5);
+    doc.moveDown(0.4); // Reduced from 0.5
+
+    const content = section.content && section.content.trim().length > 0 
+      ? section.content 
+      : '[No content]';
 
     doc.fontSize(9)
        .font('Helvetica')
        .fillColor(config.colors.secondary)
-       .text(section.content || '[No content]', { align: 'justify', lineGap: 2 });
+       .text(content, { align: 'justify', lineGap: 1.5 }); // Reduced lineGap from 2
 
-    doc.moveDown(1.5);
+    doc.moveDown(1.2); // Reduced from 1.5
 
-    if (doc.y > doc.page.height - 80) doc.addPage();
+    // Only add page if really needed
+    if (doc.y > doc.page.height - 100) doc.addPage();
   },
 
   /**

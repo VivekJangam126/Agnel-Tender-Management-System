@@ -2,6 +2,55 @@ import { pool } from '../config/db.js';
 
 export const EvaluationService = {
   /**
+   * Compute L1 (lowest qualified bid) and annotate bids with ranking and reasons
+   */
+  _annotateBidsWithL1(bids) {
+    if (!Array.isArray(bids) || bids.length === 0) return { bids, l1ProposalId: null, l1Amount: null };
+
+    const qualifiedWithAmount = bids
+      .filter((b) => b.technical_status === 'QUALIFIED' && b.bid_amount !== null)
+      .sort((a, b) => Number(a.bid_amount || 0) - Number(b.bid_amount || 0));
+
+    const l1 = qualifiedWithAmount[0] || null;
+    const l1ProposalId = l1?.proposal_id || null;
+    const l1Amount = l1?.bid_amount || null;
+
+    const annotated = bids.map((bid) => {
+      const hasAmount = bid.bid_amount !== null;
+      const isQualified = bid.technical_status === 'QUALIFIED';
+      const isDisqualified = bid.technical_status === 'DISQUALIFIED';
+      const isL1 = l1ProposalId && bid.proposal_id === l1ProposalId;
+
+      let rank_by_amount = null;
+      if (isQualified && hasAmount) {
+        rank_by_amount = qualifiedWithAmount.findIndex((qb) => qb.proposal_id === bid.proposal_id) + 1;
+        if (rank_by_amount === 0) rank_by_amount = null; // safety
+      }
+
+      let exclusion_reason = null;
+      if (!hasAmount) {
+        exclusion_reason = 'No bid amount submitted';
+      } else if (isDisqualified) {
+        exclusion_reason = 'Disqualified by technical review';
+      } else if (!isQualified) {
+        exclusion_reason = `Not qualified (status ${bid.technical_status || 'PENDING'})`;
+      } else if (l1Amount !== null && !isL1) {
+        const delta = Number(bid.bid_amount) - Number(l1Amount);
+        const pct = l1Amount > 0 ? Math.round((delta / Number(l1Amount)) * 100) : null;
+        exclusion_reason = pct !== null ? `Higher than L1 by ${pct}%` : 'Higher than L1';
+      }
+
+      return {
+        ...bid,
+        is_l1: Boolean(isL1),
+        rank_by_amount,
+        exclusion_reason,
+      };
+    });
+
+    return { bids: annotated, l1ProposalId, l1Amount };
+  },
+  /**
    * Get list of published tenders ready for evaluation (Authority only)
    */
   async getTendersForEvaluation(user) {
@@ -65,7 +114,28 @@ export const EvaluationService = {
       [tenderId]
     );
 
-    return result.rows;
+    // Annotate bids with L1 suggestion and reasons
+    const { bids: annotated, l1ProposalId, l1Amount } = this._annotateBidsWithL1(result.rows);
+
+    // Persist L1 suggestion for this tender (upsert tender_evaluation_status)
+    try {
+      const totalBids = result.rows.length;
+      await pool.query(
+        `INSERT INTO tender_evaluation_status (tender_id, evaluation_status, total_bids_received, l1_proposal_id, l1_amount)
+         VALUES ($1, COALESCE($4, 'IN_PROGRESS'), $2, $3, $5)
+         ON CONFLICT (tender_id) DO UPDATE
+         SET l1_proposal_id = $3,
+             l1_amount = $5,
+             total_bids_received = $2,
+             updated_at = NOW()`,
+        [tenderId, totalBids, l1ProposalId, null, l1Amount]
+      );
+    } catch (err) {
+      // Do not block the response if L1 persistence fails; just log
+      console.warn('[EvaluationService] Failed to persist L1 suggestion:', err.message);
+    }
+
+    return annotated;
   },
 
   /**
@@ -153,6 +223,16 @@ export const EvaluationService = {
 
     const { technical_status, technical_score, remarks } = evaluationData;
 
+    // Normalize score: treat empty as NULL, coerce numbers when provided
+    const sanitizedScore =
+      technical_score === '' || technical_score === undefined || technical_score === null
+        ? null
+        : Number(technical_score);
+
+    if (sanitizedScore !== null && Number.isNaN(sanitizedScore)) {
+      throw new Error('Invalid technical_score');
+    }
+
     // Verify authority owns the tender for this proposal
     const verify = await pool.query(
       `SELECT t.organization_id FROM proposal p
@@ -181,7 +261,7 @@ export const EvaluationService = {
            updated_at = NOW()
        WHERE proposal_id = $5
        RETURNING evaluation_id, proposal_id, technical_status, technical_score, remarks`,
-      [technical_status, technical_score, remarks, user.id, proposalId]
+      [technical_status, sanitizedScore, remarks, user.id, proposalId]
     );
 
     if (result.rows.length === 0) {

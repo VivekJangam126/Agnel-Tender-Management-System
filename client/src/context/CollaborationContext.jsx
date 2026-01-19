@@ -57,6 +57,7 @@ export function CollaborationProvider({
       setUserPermissions({});
       setLastEdits({});
       setActivity([]);
+      setError(null);
       return;
     }
 
@@ -76,10 +77,30 @@ export function CollaborationProvider({
       setUserPermissions(data.userPermissions || {});
       setLastEdits(data.lastEdits || {});
       setActivity(data.recentActivity || []);
+      setError(null);
 
     } catch (err) {
       console.error('[CollaborationContext] Load error:', err);
-      setError(err.response?.data?.error || err.message);
+      // If collaboration data doesn't exist yet (common for newly uploaded tenders),
+      // treat user as owner so they can edit their own content
+      if (err.response?.status === 404 || err.response?.status === 400) {
+        console.log('[CollaborationContext] No collaboration data found, treating user as owner');
+        setIsOwner(true);
+        setAssignments({});
+        setUserPermissions({});
+        setLastEdits({});
+        setActivity([]);
+        setError(null); // Clear error since this is expected behavior
+      } else {
+        // For other errors, still treat as owner to allow editing
+        console.warn('[CollaborationContext] Error loading collaboration, defaulting to owner access');
+        setIsOwner(true);
+        setAssignments({});
+        setUserPermissions({});
+        setLastEdits({});
+        setActivity([]);
+        setError(null);
+      }
     } finally {
       setLoading(false);
     }

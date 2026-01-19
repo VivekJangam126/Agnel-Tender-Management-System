@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import { AIService } from './ai.service.js';
+import { DummyBidderService } from './dummyBidder.service.js';
 
 export const TenderService = {
   /**
@@ -306,6 +307,16 @@ export const TenderService = {
       }
 
       await client.query('COMMIT');
+
+      // Generate dummy proposals in MVP mode (outside transaction)
+      try {
+        if (DummyBidderService.isMVPModeEnabled()) {
+          await DummyBidderService.generateDummyProposals(tenderId, user.organizationId);
+        }
+      } catch (dummyErr) {
+        console.warn('Dummy proposal generation failed, but tender published:', dummyErr.message);
+        // Don't fail the publish if dummy generation fails
+      }
 
       return publishResult.rows[0];
     } catch (err) {

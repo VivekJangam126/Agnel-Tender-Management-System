@@ -1,6 +1,7 @@
 import { apiRequest } from './apiClient.js';
 
-const BASE_URL = '/api/analytics';
+// API base already includes /api, so keep this path relative to avoid double prefix
+const BASE_URL = '/analytics';
 
 export const analyticsService = {
   async getAnalytics(token) {
