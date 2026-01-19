@@ -52,34 +52,34 @@ export const tenderService = {
 
   // Other methods (authority-side, not used by bidder UI but keeping for completeness)
   createTender: async (data) => {
-    const response = await api.post('/tenders', data);
+    const response = await api.post('/api/tenders', data);
     return response;
   },
 
   getTenders: async (params) => {
-    const response = await api.get('/tenders', { params });
+    const response = await api.get('/api/tenders', { params });
     return response;
   },
 
   getTenderById: async (id) => {
-    const response = await api.get(`/tenders/${id}`);
+    const response = await api.get(`/api/tenders/${id}`);
     return response;
   },
 
   updateTender: async (id, data) => {
-    const response = await api.put(`/tenders/${id}`, data);
+    const response = await api.put(`/api/tenders/${id}`, data);
     return response;
   },
 
   publishTender: async (id) => {
-    const response = await api.post(`/tenders/${id}/publish`);
+    const response = await api.post(`/api/tenders/${id}/publish`);
     return response;
   },
 
   uploadDocument: async (tenderId, file) => {
     const formData = new FormData();
     formData.append('document', file);
-    const response = await api.post(`/tenders/${tenderId}/upload`, formData, {
+    const response = await api.post(`/api/tenders/${tenderId}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -88,22 +88,22 @@ export const tenderService = {
   },
 
   analyzeTender: async (data) => {
-    const response = await api.post('/tenders/analyze', data);
+    const response = await api.post('/api/tenders/analyze', data);
     return response;
   },
 
   searchContent: async (data) => {
-    const response = await api.post('/tenders/search-content', data);
+    const response = await api.post('/api/tenders/search-content', data);
     return response;
   },
 
   createSection: async (tenderId, data) => {
-    const response = await api.post(`/tenders/${tenderId}/sections`, data);
+    const response = await api.post(`/api/tenders/${tenderId}/sections`, data);
     return response;
   },
 
   getSections: async (tenderId) => {
-    const response = await api.get(`/tenders/${tenderId}/sections`);
+    const response = await api.get(`/api/tenders/${tenderId}/sections`);
     return response;
   },
 

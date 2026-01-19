@@ -28,7 +28,7 @@ export const pdfAnalysisService = {
       };
     }
 
-    const response = await api.post('/pdf/analyze', formData, config);
+    const response = await api.post('/api/pdf/analyze', formData, config);
     return response.data;
   },
 
@@ -38,7 +38,7 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Created tender
    */
   async createUploadedTender(data) {
-    const response = await api.post('/bidder/uploaded-tenders', data);
+    const response = await api.post('/api/bidder/uploaded-tenders', data);
     return response.data;
   },
 
@@ -137,7 +137,7 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Saved draft
    */
   async saveProposalDraft(uploadedTenderId, params) {
-    const response = await api.post('/bidder/uploaded-proposal-drafts', {
+    const response = await api.post('/api/bidder/uploaded-proposal-drafts', {
       uploadedTenderId,
       sections: params.sections,
       title: params.title,
@@ -161,7 +161,7 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} List of drafts
    */
   async getProposalDrafts(params = {}) {
-    const response = await api.get('/bidder/uploaded-proposal-drafts', { params });
+    const response = await api.get('/api/bidder/uploaded-proposal-drafts', { params });
     return response.data;
   },
 
@@ -171,7 +171,7 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Draft data
    */
   async getProposalDraftById(draftId) {
-    const response = await api.get(`/bidder/uploaded-proposal-drafts/${draftId}`);
+    const response = await api.get(`/api/bidder/uploaded-proposal-drafts/${draftId}`);
     return response.data;
   },
 
@@ -181,7 +181,8 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Draft data
    */
   async getProposalDraftByTenderId(uploadedTenderId) {
-    return this.getProposalDraft(uploadedTenderId);
+    const response = await api.get(`/bidder/uploaded-proposal-drafts/tender/${uploadedTenderId}`);
+    return response.data;
   },
 
   /**
@@ -191,7 +192,7 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Updated draft
    */
   async updateDraftStatus(draftId, status) {
-    const response = await api.put(`/bidder/uploaded-proposal-drafts/${draftId}/status`, { status });
+    const response = await api.put(`/api/bidder/uploaded-proposal-drafts/${draftId}/status`, { status });
     return response.data;
   },
 
@@ -201,7 +202,7 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Updated draft
    */
   async recordDraftExport(draftId) {
-    const response = await api.post(`/bidder/uploaded-proposal-drafts/${draftId}/export`);
+    const response = await api.post(`/api/bidder/uploaded-proposal-drafts/${draftId}/export`);
     return response.data;
   },
 
@@ -211,7 +212,7 @@ export const pdfAnalysisService = {
    * @returns {Promise<Object>} Success response
    */
   async deleteProposalDraft(draftId) {
-    const response = await api.delete(`/bidder/uploaded-proposal-drafts/${draftId}`);
+    const response = await api.delete(`/api/bidder/uploaded-proposal-drafts/${draftId}`);
     return response.data;
   },
 };

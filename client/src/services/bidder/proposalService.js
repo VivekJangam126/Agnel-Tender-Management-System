@@ -2,29 +2,29 @@ import api from './api';
 
 export const proposalService = {
   createProposal: async (tenderId) => {
-    const response = await api.post('/bidder/proposals', { tenderId });
+    const response = await api.post('/api/bidder/proposals', { tenderId });
     return response;
   },
 
   getMyProposals: async (params) => {
-    const response = await api.get('/bidder/proposals/my-proposals', { params });
+    const response = await api.get('/api/bidder/proposals/my-proposals', { params });
     return response;
   },
 
   getProposalById: async (id) => {
-    const response = await api.get(`/bidder/proposals/${id}`);
+    const response = await api.get(`/api/bidder/proposals/${id}`);
     return response;
   },
 
   // Get proposal by tender ID (used for workspace)
   getProposalByTenderId: async (tenderId) => {
-    const response = await api.get(`/bidder/proposals/tender/${tenderId}`);
+    const response = await api.get(`/api/bidder/proposals/tender/${tenderId}`);
     return response;
   },
 
   updateProposalSection: async (proposalId, sectionId, content) => {
     const response = await api.put(
-      `/bidder/proposals/${proposalId}/sections/${sectionId}`,
+      `/api/bidder/proposals/${proposalId}/sections/${sectionId}`,
       { content }
     );
     return response;
@@ -32,7 +32,7 @@ export const proposalService = {
 
   submitProposal: async (proposalId) => {
     try {
-      const response = await api.post(`/bidder/proposals/${proposalId}/submit`);
+      const response = await api.post(`/api/bidder/proposals/${proposalId}/submit`);
       return response;
     } catch (error) {
       // Re-throw with validation details intact
@@ -55,7 +55,7 @@ export const proposalService = {
     
     try {
       const response = await api.post(
-        `/bidder/proposals/${proposalId}/sections/${sectionId}/analyze`,
+        `/api/bidder/proposals/${proposalId}/sections/${sectionId}/analyze`,
         {
           draftContent,
           tenderRequirement,
@@ -96,12 +96,12 @@ export const proposalService = {
   },
 
   checkCompliance: async (sectionId) => {
-    const response = await api.post(`/bidder/proposals/sections/${sectionId}/check-compliance`);
+    const response = await api.post(`/api/bidder/proposals/sections/${sectionId}/check-compliance`);
     return response;
   },
 
   getAnalytics: async () => {
-    const response = await api.get('/bidder/proposals/analytics');
+    const response = await api.get('/api/bidder/proposals/analytics');
     return response;
   },
 };

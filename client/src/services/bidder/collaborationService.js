@@ -35,7 +35,7 @@ export const collaborationService = {
    * @returns {Promise<Object>} { isOwner, proposal, assignments, userPermissions, lastEdits, recentActivity }
    */
   async getCollaborationData(proposalId) {
-    const response = await api.get(`/collaboration/proposals/${proposalId}/assignments`);
+    const response = await api.get(`/api/collaboration/proposals/${proposalId}/assignments`);
     return response.data?.data || {};
   },
 
@@ -48,7 +48,7 @@ export const collaborationService = {
    */
   async assignUser(proposalId, sectionId, userId, permission) {
     const response = await api.post(
-      `/collaboration/proposals/${proposalId}/sections/${sectionId}/assign`,
+      `/api/collaboration/proposals/${proposalId}/sections/${sectionId}/assign`,
       { userId, permission }
     );
     return response.data?.data;
@@ -59,7 +59,7 @@ export const collaborationService = {
    */
   async removeAssignment(proposalId, sectionId, userId) {
     const response = await api.delete(
-      `/collaboration/proposals/${proposalId}/sections/${sectionId}/users/${userId}`
+      `/api/collaboration/proposals/${proposalId}/sections/${sectionId}/users/${userId}`
     );
     return response.data;
   },
@@ -73,7 +73,7 @@ export const collaborationService = {
    */
   async getComments(proposalId, sectionId) {
     const response = await api.get(
-      `/collaboration/proposals/${proposalId}/sections/${sectionId}/comments`
+      `/api/collaboration/proposals/${proposalId}/sections/${sectionId}/comments`
     );
     return response.data?.data || [];
   },
@@ -84,7 +84,7 @@ export const collaborationService = {
    */
   async createComment({ proposalId, sectionId, content, parentCommentId, quotedText }) {
     const response = await api.post(
-      `/collaboration/proposals/${proposalId}/sections/${sectionId}/comments`,
+      `/api/collaboration/proposals/${proposalId}/sections/${sectionId}/comments`,
       { content, parentCommentId, quotedText }
     );
     return response.data?.data;
@@ -128,7 +128,7 @@ export const collaborationService = {
    * Get comment counts per section
    */
   async getCommentCounts(proposalId) {
-    const response = await api.get(`/collaboration/proposals/${proposalId}/comment-counts`);
+    const response = await api.get(`/api/collaboration/proposals/${proposalId}/comment-counts`);
     return response.data?.data || {};
   },
 
@@ -144,7 +144,7 @@ export const collaborationService = {
    */
   async generateDraft(proposalId, sectionId, customInstructions = '') {
     const response = await api.post(
-      `/collaboration/proposals/${proposalId}/sections/${sectionId}/generate-draft`,
+      `/api/collaboration/proposals/${proposalId}/sections/${sectionId}/generate-draft`,
       { customInstructions }
     );
     return response.data?.data;
@@ -158,7 +158,7 @@ export const collaborationService = {
    * Validate proposal against tender requirements
    */
   async validateProposal(proposalId) {
-    const response = await api.post(`/collaboration/proposals/${proposalId}/validate`);
+    const response = await api.post(`/api/collaboration/proposals/${proposalId}/validate`);
     return response.data?.data;
   },
 
@@ -170,7 +170,7 @@ export const collaborationService = {
    * Get activity log for a proposal
    */
   async getActivity(proposalId, limit = 50) {
-    const response = await api.get(`/collaboration/proposals/${proposalId}/activity`, {
+    const response = await api.get(`/api/collaboration/proposals/${proposalId}/activity`, {
       params: { limit },
     });
     return response.data?.data || [];
